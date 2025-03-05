@@ -41,6 +41,10 @@ cd .. && \
 rm -rf NeXdocMan NeXdocMan.tar.gz
 ```
 
+- ##### Note: After installation, you must run 'newgrp docker' to apply the Docker group in your current session.
+- ##### Alternatively, start a new terminal session or log out and back in.
+
+
 ### 🖥️ Usage
 To access the interactive menu (TUI):
 ```bash
