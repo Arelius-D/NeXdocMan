@@ -10,7 +10,6 @@ Takes the hassle out of setting things up by ensuring a smooth and reliable expe
 ### 📌 Features
 - **One-command Setup** – Install Docker and Docker Compose effortlessly.
 - **User Management** – Automatically adds the current user to the Docker group.
-- **Seamless Workflow** – Eliminates the need to log in and out after installation.
 - **Automated Updates** – Check for and apply Docker updates.
 - **Safe Uninstallation** – Cleanly purge Docker and related components if needed.
 - **Interactive & CLI Modes** – Use an interactive menu or command-line flags.
