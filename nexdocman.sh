@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.0"
+VERSION="v2.0.1"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -206,8 +206,6 @@ install_utility() {
     if [ -f "/usr/local/bin/$SCRIPT_FILE_NAME" ]; then
         sudo rm -f "/usr/local/bin/$SCRIPT_FILE_NAME"
     fi
-    
-    setup_cron
     
     if [ -f "/usr/local/bin/$SCRIPT_NAME" ] && [ -x "/usr/local/bin/$SCRIPT_NAME" ]; then
         log_message "[INFO] SUCCESS: Verified: /usr/local/bin/$SCRIPT_NAME exists and is executable"
