@@ -135,8 +135,6 @@ sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 ```
 
-_(Note: If you are pulling just the raw script, simply run `curl -sO <URL> && chmod +x nexdocman.sh && sudo ./nexdocman.sh --deploy`)_
-
 **Option B: Using wget**
 
 ```bash
@@ -145,8 +143,6 @@ tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 ```
-
-_(Note: If you are pulling just the raw script, simply run `wget -q <URL> && chmod +x nexdocman.sh && sudo ./nexdocman.sh --deploy`)_
 
 ---
 
@@ -228,7 +224,7 @@ sudo nexdocman -p -y           # Nuke and pave the entire Docker system silently
 
 **A:** Everything. It stops the daemon, uninstalls the core `docker-ce` binaries, and actively recursively deletes `/var/lib/docker/`, `/var/lib/containerd/`, and `~/.docker`. Only use this if you want a complete environment wipe. Container volumes stored in `/var/lib/docker` will be eradicated.
 
-### Q: What exactly does `--remove-utility` delete?
+### Q: What exactly does `-r, --remove` delete?
 
 **A:** It removes NeXdocMan completely, but **leaves Docker safely running**. It deletes the `nexdocman` binary, the `/usr/local/lib/nexdocman` config, the `/var/log/NeXdocMan` log folder, and strips the automation schedules from your `crontab`.
 
