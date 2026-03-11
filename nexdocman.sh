@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.0.1"
+VERSION="v2.2"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -151,6 +151,8 @@ show_help() {
     echo "  [Docker Operations]"
     echo "  -i, --install        Install Docker and Docker Compose and set up groups."
     echo "  -m, --manage         Check for Docker and Compose updates and apply them."
+    echo "  -k, --check-images   Audit local Docker images for remote updates (Read-only)."
+    echo "  -u, --update-images  Audit local Docker images and pull available updates."
     echo "  -c, --cleanup        Manually trigger a deep Docker system prune."
     echo "  -C, --configure-cron Reload the automated prune schedule from $CFG_FILE."
     echo "  -p, --purge          Completely uninstall Docker, Compose, and wipe all data."
@@ -524,6 +526,78 @@ check_update() {
     fi
 }
 
+# MODULE: CHECK IMAGES (Manage Docker Images)
+check_images() {
+    local force_check_only="${1:-false}"
+    log_message "[INFO] Scanning local Docker images against remote manifests..."
+    
+    if ! command -v jq &> /dev/null; then
+        if [ "$AUTO_YES" = true ]; then
+            log_message "[INFO] Required dependency 'jq' not found. Auto-installing..."
+            run_command sudo apt-get update
+            run_command sudo apt-get install -y jq
+        else
+            read -p "[WARNING] Required dependency 'jq' not found. Install 'jq' to proceed? (y/N): " install_jq
+            if [[ "$install_jq" =~ ^[Yy]$ ]]; then
+                run_command sudo apt-get update
+                run_command sudo apt-get install -y jq
+            else
+                log_message "[ERROR] Cannot proceed without 'jq'."
+                return 1
+            fi
+        fi
+    fi
+
+    local update_count=0
+    local images_to_update=()
+    
+    for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>'); do
+        local arch
+        arch=$(docker info -f '{{.Architecture}}' 2>/dev/null)
+        local local_id
+        local_id=$(docker image inspect "$img" -f '{{.Id}}' 2>/dev/null)
+        local remote_id
+        remote_id=$(docker manifest inspect -v "$img" 2>/dev/null | jq -r --arg a "$arch" 'if type == "array" then .[] | select(.Descriptor.platform.architecture == $a) | .SchemaV2Manifest.config.digest else .SchemaV2Manifest.config.digest end')
+        
+        if [[ -n "$remote_id" && "$local_id" != "$remote_id" ]]; then
+            log_message "[WARNING] $img: UPDATE AVAILABLE"
+            images_to_update+=("$img")
+            ((update_count++))
+        else
+            log_message "[INFO] OK: $img: CURRENT"
+        fi
+    done
+    
+    if [ "$update_count" -gt 0 ]; then
+        if [ "$force_check_only" = true ]; then
+            log_message "[INFO] Audit complete. $update_count image(s) have available updates. Use --update-images to pull."
+            return 0
+        fi
+
+        if [ "$AUTO_YES" = false ]; then
+            log_message "[INFO] Options available for $update_count image(s)."
+            read -p "[INFO] Pull latest versions for these images? (y/N): " pull_choice
+        fi
+        
+        if [[ "$AUTO_YES" = true || "$pull_choice" =~ ^[Yy]$ ]]; then
+            for img_to_pull in "${images_to_update[@]}"; do
+                log_message "[INFO] Pulling $img_to_pull..."
+                run_command sudo docker pull "$img_to_pull"
+                if [ $? -eq 0 ]; then
+                    log_message "[INFO] SUCCESS: $img_to_pull updated."
+                else
+                    log_message "[ERROR] Failed to pull $img_to_pull. Check $LOG_FILE."
+                fi
+            done
+            log_message "[INFO] SUCCESS: Image update sequence complete."
+        else
+            log_message "[INFO] Image update skipped."
+        fi
+    else
+        log_message "[INFO] SUCCESS: All local images are current."
+    fi
+}
+
 # MODULE: PURGE
 purge_docker() {
     log_message "[INFO] Checking for Docker and Docker Compose..."
@@ -603,6 +677,8 @@ initiate_install=false
 do_cleanup=false
 configure_cron=false
 uninstall_utility_flag=false
+do_check_images=false
+do_update_images=false
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -613,6 +689,8 @@ while [[ "$#" -gt 0 ]]; do
         -i|--install) do_install=true ;;
         -p|--purge) do_purge=true ;;
         -m|--manage) do_manage=true ;;
+        -k|--check-images) do_check_images=true ;;
+        -u|--update-images) do_update_images=true ;;
         -c|--cleanup) do_cleanup=true ;;
         -C|--configure-cron) configure_cron=true ;;
         -d|--deploy) initiate_install=true ;;
@@ -633,18 +711,19 @@ show_menu() {
     echo "   2. Check and Update Docker & Docker Compose"
     echo ""
     echo " [Maintenance & Automation]"
-    echo "   3. Run Automated System Cleanup (Prune)"
-    echo "   4. Configure Automated Cleanup Schedule (Cron)"
+    echo "   3. Check Local Images for Available Updates"
+    echo "   4. Run Automated System Cleanup (Prune)"
+    echo "   5. Configure Automated Cleanup Schedule (Cron)"
     echo ""
     echo " [Advanced & Destructive]"
-    echo "   5. Purge ALL Docker Installations & Volumes"
+    echo "   6. Purge ALL Docker Installations & Volumes"
     echo ""
     echo "   0. Exit"
     echo "--------------------------------------------------"
-    echo -n "Choose an option [0-5]: "
+    echo -n "Choose an option [0-6]: "
 }
 
-if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ] || [ "$do_cleanup" = true ] || [ "$configure_cron" = true ] || [ "$initiate_install" = true ] || [ "$uninstall_utility_flag" = true ]; then
+if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ] || [ "$do_check_images" = true ] || [ "$do_update_images" = true ] || [ "$do_cleanup" = true ] || [ "$configure_cron" = true ] || [ "$initiate_install" = true ] || [ "$uninstall_utility_flag" = true ]; then
     log_message "[INFO] Running $UTILITY_NAME $VERSION"
     if [ "$do_purge" = true ] && [ "$do_manage" = true ]; then
         log_message "[ERROR] Cannot use --purge and --manage together!"
@@ -657,6 +736,10 @@ if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ]
         purge_docker
     elif [ "$do_manage" = true ]; then
         check_update
+    elif [ "$do_check_images" = true ]; then
+        check_images true
+    elif [ "$do_update_images" = true ]; then
+        check_images false
     elif [ "$do_cleanup" = true ]; then
         perform_cleanup
     elif [ "$configure_cron" = true ]; then
@@ -682,13 +765,17 @@ else
                 ;;
             3)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                perform_cleanup
+                check_images false
                 ;;
             4)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                setup_cron
+                perform_cleanup
                 ;;
             5)
+                log_message "[INFO] Running $UTILITY_NAME $VERSION"
+                setup_cron
+                ;;
+            6)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
                 purge_docker
                 ;;

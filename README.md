@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.0.1  
+> **Version:** v2.2  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -129,7 +129,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.0.1/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.2/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -138,7 +138,7 @@ cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 **Option B: Using wget**
 
 ```bash
-wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.0.1/NeXdocMan.tar.gz && \
+wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.2/NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -158,7 +158,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐧 NeXdocMan - Docker Manager (v2.0.1)
+ 🐧 NeXdocMan - Docker Manager (v2.2)
 ==================================================
 
  [Core Operations]
@@ -166,15 +166,16 @@ nexdocman
    2. Check and Update Docker & Docker Compose
 
  [Maintenance & Automation]
-   3. Run Automated System Cleanup (Prune)
-   4. Configure Automated Cleanup Schedule (Cron)
+   3. Check Local Images for Available Updates
+   4. Run Automated System Cleanup (Prune)
+   5. Configure Automated Cleanup Schedule (Cron)
 
  [Advanced & Destructive]
-   5. Purge ALL Docker Installations & Volumes
+   6. Purge ALL Docker Installations & Volumes
 
    0. Exit
 --------------------------------------------------
-Choose an option [0-5]:
+Choose an option [0-6]:
 ```
 
 ### Automation CLI Mode:
@@ -197,6 +198,8 @@ OPTIONS:
   [Docker Operations]
   -i, --install        Install Docker and Docker Compose and set up groups.
   -m, --manage         Check for Docker and Compose updates and apply them.
+  -k, --check-images   Audit local Docker images for remote updates (Read-only).
+  -u, --update-images  Audit local Docker images and pull available updates.
   -c, --cleanup        Manually trigger a deep Docker system prune.
   -C, --configure-cron Reload the automated prune schedule from nexdocman.cfg.
   -p, --purge          Completely uninstall Docker, Compose, and wipe all data.
