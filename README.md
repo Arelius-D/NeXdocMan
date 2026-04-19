@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.2  
+> **Version:** v2.3  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -42,11 +42,11 @@ NeXdocMan is completely self-aware and dynamic.
 
 NeXdocMan follows a strict execution pipeline to ensure system integrity:
 
-1. **Self-Deploying Payload:** When you download the utility, it instantly installs itself to your global system binaries (`/usr/local/bin/nexdocman`) and **deletes the downloaded file** to keep your workspace flawlessly clean.
+1. **Self-Deploying Payload:** When you download the utility, it instantly installs itself to your global system binaries (`/usr/local/bin/NeXdocMan`) and **deletes the downloaded file** to keep your workspace flawlessly clean.
 2. **Pre-Flight Scans:** Validates OS dependencies and completely purges legacy/conflicting Docker packages (`docker.io`, `podman-docker`, `runc`) to ensure a pure installation path.
 3. **Dynamic Installation:** Natively routes the official Docker socket via `curl` or `wget`, installing both Docker and Docker Compose.
 4. **Environment Injection:** Dynamically pushes your `$USER` into the `docker` group and performs an active system daemon test (`hello-world`) to guarantee stability.
-5. **Configuration Generation:** Creates a heavily documented `.cfg` file in `/usr/local/lib/nexdocman/`, defining your automation boundaries.
+5. **Configuration Generation:** Creates a heavily documented `.cfg` file in `/usr/local/lib/NeXdocMan/`, defining your automation boundaries.
 6. **Cron Implantation:** Reads your config file and securely injects a system-silent cron job dedicated to pruning your environment on schedule.
 7. **Clean Purging & Removal:** Offers surgical precision removal. You can uninstall just the utility (`--remove-utility`), or completely nuke the Docker engine, its networks, and its volumes (`--purge`).
 
@@ -54,7 +54,7 @@ NeXdocMan follows a strict execution pipeline to ensure system integrity:
 
 ## 4. Configuration Guide
 
-NeXdocMan is heavily controlled via `nexdocman.cfg`, auto-generated in `/usr/local/lib/nexdocman/` upon initial deployment.
+NeXdocMan is heavily controlled via `NeXdocMan.cfg`, auto-generated in `/usr/local/lib/NeXdocMan/` upon initial deployment.
 
 ### `[ENABLE_AUTO_CLEANUP]` & `[CLEANUP_CRON]`
 
@@ -124,7 +124,7 @@ To get started, you must **deploy** the utility. You download a temporary script
 2. It installs itself permanently into your system PATH.
 3. **It deletes the temporary downloaded payload.**
 
-_From that point forward, you simply type `nexdocman` anywhere in your terminal. You do not need the `.sh` file anymore._
+_From that point forward, you simply type `NeXdocMan` anywhere in your terminal. You do not need the `.sh` file anymore._
 
 **Option A: Using curl**
 
@@ -182,7 +182,7 @@ Choose an option [0-6]:
 
 ```text
 USAGE:
-  nexdocman [OPTIONS]
+  NeXdocMan [OPTIONS]
 
 OPTIONS:
   [General]
@@ -201,18 +201,18 @@ OPTIONS:
   -k, --check-images   Audit local Docker images for remote updates (Read-only).
   -u, --update-images  Audit local Docker images and pull available updates.
   -c, --cleanup        Manually trigger a deep Docker system prune.
-  -C, --configure-cron Reload the automated prune schedule from nexdocman.cfg.
+  -C, --configure-cron Reload the automated prune schedule from NeXdocMan.cfg.
   -p, --purge          Completely uninstall Docker, Compose, and wipe all data.
 ```
 
 **Examples:**
 
 ```bash
-sudo nexdocman -d              # First-time setup on a new server
-sudo nexdocman -i -y           # Install Docker cleanly with no prompts
-nexdocman -c                   # Trigger an immediate runtime prune
-nexdocman -r -y                # Uninstall NeXdocMan but leave Docker running
-sudo nexdocman -p -y           # Nuke and pave the entire Docker system silently
+sudo NeXdocMan -d              # First-time setup on a new server
+sudo NeXdocMan -i -y           # Install Docker cleanly with no prompts
+NeXdocMan -c                   # Trigger an immediate runtime prune
+NeXdocMan -r -y                # Uninstall NeXdocMan but leave Docker running
+sudo NeXdocMan -p -y           # Nuke and pave the entire Docker system silently
 ```
 
 ---
@@ -229,7 +229,7 @@ sudo nexdocman -p -y           # Nuke and pave the entire Docker system silently
 
 ### Q: What exactly does `-r, --remove` delete?
 
-**A:** It removes NeXdocMan completely, but **leaves Docker safely running**. It deletes the `nexdocman` binary, the `/usr/local/lib/nexdocman` config, the `/var/log/NeXdocMan` log folder, and strips the automation schedules from your `crontab`.
+**A:** It removes NeXdocMan completely, but **leaves Docker safely running**. It deletes the `NeXdocMan` binary, the `/usr/local/lib/nexdocman` config, the `/var/log/NeXdocMan` log folder, and strips the automation schedules from your `crontab`.
 
 ### Q: How do I know if the automated cleanup is working?
 

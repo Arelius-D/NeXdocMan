@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.2"
+VERSION="v2.3"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -531,38 +531,27 @@ check_images() {
     local force_check_only="${1:-false}"
     log_message "[INFO] Scanning local Docker images against remote manifests..."
     
-    if ! command -v jq &> /dev/null; then
-        if [ "$AUTO_YES" = true ]; then
-            log_message "[INFO] Required dependency 'jq' not found. Auto-installing..."
-            run_command sudo apt-get update
-            run_command sudo apt-get install -y jq
-        else
-            read -p "[WARNING] Required dependency 'jq' not found. Install 'jq' to proceed? (y/N): " install_jq
-            if [[ "$install_jq" =~ ^[Yy]$ ]]; then
-                run_command sudo apt-get update
-                run_command sudo apt-get install -y jq
-            else
-                log_message "[ERROR] Cannot proceed without 'jq'."
-                return 1
-            fi
-        fi
-    fi
-
     local update_count=0
     local images_to_update=()
     
     for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>'); do
-        local arch
-        arch=$(docker info -f '{{.Architecture}}' 2>/dev/null)
-        local local_id
-        local_id=$(docker image inspect "$img" -f '{{.Id}}' 2>/dev/null)
-        local remote_id
-        remote_id=$(docker manifest inspect -v "$img" 2>/dev/null | jq -r --arg a "$arch" 'if type == "array" then .[] | select(.Descriptor.platform.architecture == $a) | .SchemaV2Manifest.config.digest else .SchemaV2Manifest.config.digest end')
+        local local_digest
+        local_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$img" 2>/dev/null | grep -o 'sha256:.*')
+
+        local remote_digest
+        remote_digest=$(docker buildx imagetools inspect "$img" 2>/dev/null | grep "^Digest:" | head -n 1 | awk '{print $2}')
         
-        if [[ -n "$remote_id" && "$local_id" != "$remote_id" ]]; then
-            log_message "[WARNING] $img: UPDATE AVAILABLE"
+        if [[ -z "$local_digest" && -n "$remote_digest" ]]; then
+            log_message "[WARNING] $img: UPDATE AVAILABLE (Missing local mapping)"
             images_to_update+=("$img")
             ((update_count++))
+        elif [[ -n "$remote_digest" && "$local_digest" != "$remote_digest" ]]; then
+            log_message "[WARNING] $img: UPDATE AVAILABLE"
+            log_message "[DEBUG] Local: $local_digest | Remote: $remote_digest"
+            images_to_update+=("$img")
+            ((update_count++))
+        elif [[ -z "$remote_digest" ]]; then
+            log_message "[INFO] SKIP: $img: (No remote digest found. Locally built or private?)"
         else
             log_message "[INFO] OK: $img: CURRENT"
         fi
