@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.3"
+VERSION="v2.4"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -533,6 +533,7 @@ check_images() {
     
     local update_count=0
     local images_to_update=()
+    local containers_to_recreate=()
     
     for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>'); do
         local local_digest
@@ -541,19 +542,29 @@ check_images() {
         local remote_digest
         remote_digest=$(docker buildx imagetools inspect "$img" 2>/dev/null | grep "^Digest:" | head -n 1 | awk '{print $2}')
         
+        local has_update=false
         if [[ -z "$local_digest" && -n "$remote_digest" ]]; then
             log_message "[WARNING] $img: UPDATE AVAILABLE (Missing local mapping)"
-            images_to_update+=("$img")
-            ((update_count++))
+            has_update=true
         elif [[ -n "$remote_digest" && "$local_digest" != "$remote_digest" ]]; then
             log_message "[WARNING] $img: UPDATE AVAILABLE"
             log_message "[DEBUG] Local: $local_digest | Remote: $remote_digest"
-            images_to_update+=("$img")
-            ((update_count++))
+            has_update=true
         elif [[ -z "$remote_digest" ]]; then
             log_message "[INFO] SKIP: $img: (No remote digest found. Locally built or private?)"
         else
             log_message "[INFO] OK: $img: CURRENT"
+        fi
+
+        if [ "$has_update" = true ]; then
+            images_to_update+=("$img")
+            ((update_count++))
+            # Track containers using this image
+            while read -r c_id; do
+                if [[ ! " ${containers_to_recreate[@]} " =~ " ${c_id} " ]]; then
+                    containers_to_recreate+=("$c_id")
+                fi
+            done < <(docker ps --filter "ancestor=$img" --format '{{.ID}}')
         fi
     done
     
@@ -579,6 +590,31 @@ check_images() {
                 fi
             done
             log_message "[INFO] SUCCESS: Image update sequence complete."
+
+            if [ ${#containers_to_recreate[@]} -gt 0 ]; then
+                if [ "$AUTO_YES" = false ]; then
+                    read -p "[INFO] Recreate ${#containers_to_recreate[@]} container(s) to apply updates? (y/N): " recreate_choice
+                fi
+                
+                if [[ "$AUTO_YES" = true || "$recreate_choice" =~ ^[Yy]$ ]]; then
+                    for c_id in "${containers_to_recreate[@]}"; do
+                        local c_name=$(docker inspect --format '{{.Name}}' "$c_id" | sed 's/^\///')
+                        local compose_dir=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$c_id" 2>/dev/null)
+                        local compose_service=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$c_id" 2>/dev/null)
+                        
+                        if [ -n "$compose_dir" ] && [ -n "$compose_service" ]; then
+                            log_message "[INFO] Recreating Compose service: $compose_service ($c_name)..."
+                            if (cd "$compose_dir" && sudo docker compose up -d --no-deps "$compose_service"); then
+                                log_message "[INFO] SUCCESS: $c_name recreated."
+                            else
+                                log_message "[ERROR] Failed to recreate $c_name."
+                            fi
+                        else
+                            log_message "[WARNING] $c_name is a standalone container. Recreate manually to apply update."
+                        fi
+                    done
+                fi
+            fi
         else
             log_message "[INFO] Image update skipped."
         fi
