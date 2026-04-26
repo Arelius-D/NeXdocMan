@@ -126,7 +126,7 @@ show_versions() {
 
 show_help() {
     echo "========================================================================="
-    echo " 🐧 $UTILITY_NAME ($VERSION) - Intelligent Docker Orchestrator"
+    echo " 🐳 $UTILITY_NAME ($VERSION) - Intelligent Docker Orchestrator"
     echo "========================================================================="
     echo ""
     echo "USAGE:"
@@ -216,7 +216,8 @@ install_utility() {
         
         local orig_path
         orig_path=$(realpath "$0")
-        if [[ "$orig_path" != "/usr/local/bin/"* ]]; then
+        local script_dir=$(dirname "$orig_path")
+        if [[ "$orig_path" != "/usr/local/bin/"* ]] && [ ! -d "$script_dir/.git" ]; then
             log_message "[INFO] Removing deployment payload: $orig_path"
             sudo rm -f "$orig_path"
         fi
@@ -819,7 +820,7 @@ done
 show_menu() {
     clear
     echo "=================================================="
-    echo " 🐧 $UTILITY_NAME - Docker Manager ($VERSION)"
+    echo " 🐳 $UTILITY_NAME - Docker Manager ($VERSION)"
     echo "=================================================="
     echo ""
     echo " [Core Operations]"

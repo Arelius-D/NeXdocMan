@@ -172,7 +172,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐧 NeXdocMan - Docker Manager (v2.5)
+ 🐳 NeXdocMan - Docker Manager (v2.5)
 ==================================================
 
  [Core Operations]
