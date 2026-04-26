@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.4  
+> **Version:** v2.5  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -15,7 +15,7 @@ It is designed for environments (Homelabs, Remote Servers, CI/CD Nodes) where yo
 
 ## 2. Why Use NeXdocMan? (The Logic)
 
-NeXdocMan solves four critical problems inherent in manual Docker management:
+NeXdocMan solves five critical problems inherent in manual Docker management:
 
 ### A. The "Bloat" Filter (Intelligent System Pruning)
 
@@ -42,6 +42,13 @@ Pulling a new image doesn't automatically update your running containers.
 
 - **The Problem:** You pull a new image, but your container continues to run the old, potentially vulnerable version until you manually restart/recreate it.
 - **The NeXdocMan Solution:** NeXdocMan intelligently maps running containers to their images. When an update is pulled, it offers to automatically recreate the affected containers. For Compose-managed services, it performs a seamless `up -d --no-deps` swap, ensuring the new image is applied without losing your configuration or volumes.
+
+### E. Self-Maintaining Core (Utility Updates)
+
+Managing the manager shouldn't be a chore.
+
+- **The Problem:** Keeping your deployment tools updated manually usually involves re-downloading and manual overwriting.
+- **The NeXdocMan Solution:** NeXdocMan can now update itself. By polling the GitHub API, it detects when a new version of the utility is released and offers a one-click automated update path that re-deploys the latest binary globally.
 
 ---
 
@@ -136,7 +143,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.4/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.5/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -145,7 +152,7 @@ cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 **Option B: Using wget**
 
 ```bash
-wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.4/NeXdocMan.tar.gz && \
+wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.5/NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -165,7 +172,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐧 NeXdocMan - Docker Manager (v2.4)
+ 🐧 NeXdocMan - Docker Manager (v2.5)
 ==================================================
 
  [Core Operations]
@@ -179,10 +186,11 @@ nexdocman
 
  [Advanced & Destructive]
    6. Purge ALL Docker Installations & Volumes
+   7. Check and Update NeXdocMan Utility
 
    0. Exit
 --------------------------------------------------
-Choose an option [0-6]:
+Choose an option [0-7]:
 ```
 
 ### Automation CLI Mode:
@@ -210,6 +218,7 @@ OPTIONS:
   -c, --cleanup        Manually trigger a deep Docker system prune.
   -C, --configure-cron Reload the automated prune schedule from nexdocman.cfg.
   -p, --purge          Completely uninstall Docker, Compose, and wipe all data.
+  -U, --update-utility Check for and apply updates to NeXdocMan utility.
 ```
 
 **Examples:**
@@ -218,7 +227,7 @@ OPTIONS:
 sudo nexdocman -d              # First-time setup on a new server
 sudo nexdocman -i -y           # Install Docker cleanly with no prompts
 nexdocman -c                   # Trigger an immediate runtime prune
-nexdocman -r -y                # Uninstall nexdocman but leave Docker running
+nexdocman -U                   # Check for and apply NeXdocMan utility updates
 sudo nexdocman -p -y           # Nuke and pave the entire Docker system silently
 ```
 

@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.4"
+VERSION="v2.5"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -156,6 +156,7 @@ show_help() {
     echo "  -c, --cleanup        Manually trigger a deep Docker system prune."
     echo "  -C, --configure-cron Reload the automated prune schedule from $CFG_FILE."
     echo "  -p, --purge          Completely uninstall Docker, Compose, and wipe all data."
+    echo "  -U, --update-utility Check for and apply updates to NeXdocMan utility."
     echo ""
     echo "EXAMPLES:"
     echo "  sudo $SCRIPT_NAME -d              # First-time setup on a new server"
@@ -261,6 +262,94 @@ uninstall_utility() {
     sudo rm -f "/usr/local/bin/$SCRIPT_NAME"
     echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] Uninstall complete."
     exit 0
+}
+
+# MODULE: UPDATE UTILITY
+update_utility() {
+    log_message "[INFO] Checking for $UTILITY_NAME updates..."
+    
+    if ! command -v curl &>/dev/null; then
+        log_message "[ERROR] curl is required for self-updates."
+        return 1
+    fi
+
+    local latest_json
+    latest_json=$(curl -s https://api.github.com/repos/Arelius-D/NeXdocMan/releases/latest)
+    if [ $? -ne 0 ] || [ -z "$latest_json" ]; then
+        log_message "[ERROR] Failed to connect to GitHub API."
+        return 1
+    fi
+
+    local latest_version
+    latest_version=$(echo "$latest_json" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    
+    if [ -z "$latest_version" ]; then
+        log_message "[ERROR] Could not determine latest version from GitHub."
+        return 1
+    fi
+
+    if [[ "$latest_version" == "$VERSION" ]]; then
+        log_message "[INFO] $UTILITY_NAME is already up-to-date ($VERSION)."
+        return 0
+    fi
+
+    log_message "[INFO] New version available: $latest_version (Current: $VERSION)"
+    
+    if [ "$AUTO_YES" = false ]; then
+        read -p "[INFO] Update $UTILITY_NAME to $latest_version? (y/N): " update_choice
+    fi
+
+    if [[ "$AUTO_YES" = true || "$update_choice" =~ ^[Yy]$ ]]; then
+        local download_url
+        download_url=$(echo "$latest_json" | grep '"browser_download_url":' | grep "NeXdocMan.tar.gz" | sed -E 's/.*"([^"]+)".*/\1/')
+        
+        if [ -z "$download_url" ]; then
+            log_message "[ERROR] Could not find download URL for NeXdocMan.tar.gz."
+            return 1
+        fi
+
+        log_message "[INFO] Downloading update from $download_url..."
+        local tmp_dir
+        tmp_dir=$(mktemp -d)
+        
+        if ! curl -L "$download_url" -o "$tmp_dir/NeXdocMan.tar.gz"; then
+            log_message "[ERROR] Failed to download update."
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+
+        log_message "[INFO] Extracting update..."
+        if ! tar -xzvf "$tmp_dir/NeXdocMan.tar.gz" -C "$tmp_dir" >/dev/null 2>&1; then
+            log_message "[ERROR] Failed to extract update."
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+
+        local new_script="$tmp_dir/nexdocman.sh"
+        if [ ! -f "$new_script" ]; then
+            new_script=$(find "$tmp_dir" -name "nexdocman.sh" | head -n 1)
+        fi
+
+        if [ -f "$new_script" ]; then
+            log_message "[INFO] Applying update via deployment module..."
+            sudo chmod +x "$new_script"
+            if sudo "$new_script" -d; then
+                log_message "[INFO] SUCCESS: $UTILITY_NAME updated to $latest_version."
+                rm -rf "$tmp_dir"
+                exit 0
+            else
+                log_message "[ERROR] Deployment of new version failed."
+                rm -rf "$tmp_dir"
+                return 1
+            fi
+        else
+            log_message "[ERROR] Could not find nexdocman.sh in extracted archive."
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+    else
+        log_message "[INFO] Update cancelled."
+    fi
 }
 
 # MODULE: CLEANUP & LOG MANAGEMENT
@@ -704,6 +793,7 @@ configure_cron=false
 uninstall_utility_flag=false
 do_check_images=false
 do_update_images=false
+do_update_utility=false
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -720,6 +810,7 @@ while [[ "$#" -gt 0 ]]; do
         -C|--configure-cron) configure_cron=true ;;
         -d|--deploy) initiate_install=true ;;
         -r|--remove) uninstall_utility_flag=true ;;
+        -U|--update-utility) do_update_utility=true ;;
         *) log_message "[ERROR] Unknown parameter: $1"; exit 1 ;;
     esac
     shift
@@ -742,13 +833,14 @@ show_menu() {
     echo ""
     echo " [Advanced & Destructive]"
     echo "   6. Purge ALL Docker Installations & Volumes"
+    echo "   7. Check and Update NeXdocMan Utility"
     echo ""
     echo "   0. Exit"
     echo "--------------------------------------------------"
-    echo -n "Choose an option [0-6]: "
+    echo -n "Choose an option [0-7]: "
 }
 
-if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ] || [ "$do_check_images" = true ] || [ "$do_update_images" = true ] || [ "$do_cleanup" = true ] || [ "$configure_cron" = true ] || [ "$initiate_install" = true ] || [ "$uninstall_utility_flag" = true ]; then
+if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ] || [ "$do_check_images" = true ] || [ "$do_update_images" = true ] || [ "$do_cleanup" = true ] || [ "$configure_cron" = true ] || [ "$initiate_install" = true ] || [ "$uninstall_utility_flag" = true ] || [ "$do_update_utility" = true ]; then
     log_message "[INFO] Running $UTILITY_NAME $VERSION"
     if [ "$do_purge" = true ] && [ "$do_manage" = true ]; then
         log_message "[ERROR] Cannot use --purge and --manage together!"
@@ -773,6 +865,8 @@ if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ]
         install_utility
     elif [ "$uninstall_utility_flag" = true ]; then
         uninstall_utility
+    elif [ "$do_update_utility" = true ]; then
+        update_utility
     fi
     exit 0
 else
@@ -803,6 +897,10 @@ else
             6)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
                 purge_docker
+                ;;
+            7)
+                log_message "[INFO] Running $UTILITY_NAME $VERSION"
+                update_utility
                 ;;
             0)
                 log_message "[INFO] Exiting."
