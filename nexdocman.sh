@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.5"
+VERSION="v2.6"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -23,6 +23,9 @@ CLEANUP_CRON="0 3 */2 * *"
 LOG_LEVEL="INFO"
 LOGPRUNE_ENABLED=true
 LOGPRUNE_MAX_AGE_DAYS=7
+
+ENABLE_AUTO_IMAGE_UPDATE=false
+IMAGE_UPDATE_CRON="0 4 * * 0"
 
 # Load config if exists
 if [ -f "$CFG_FILE" ]; then
@@ -111,6 +114,8 @@ create_default_config() {
 
 ENABLE_AUTO_CLEANUP=true
 CLEANUP_CRON="0 3 */2 * *"
+ENABLE_AUTO_IMAGE_UPDATE=false
+IMAGE_UPDATE_CRON="0 4 * * 0"
 LOG_LEVEL="INFO"
 LOGPRUNE_ENABLED=true
 LOGPRUNE_MAX_AGE_DAYS=7
@@ -154,7 +159,7 @@ show_help() {
     echo "  -k, --check-images   Audit local Docker images for remote updates (Read-only)."
     echo "  -u, --update-images  Audit local Docker images and pull available updates."
     echo "  -c, --cleanup        Manually trigger a deep Docker system prune."
-    echo "  -C, --configure-cron Reload the automated prune schedule from $CFG_FILE."
+    echo "  -C, --configure-cron Reload the automated schedules from $CFG_FILE."
     echo "  -p, --purge          Completely uninstall Docker, Compose, and wipe all data."
     echo "  -U, --update-utility Check for and apply updates to NeXdocMan utility."
     echo ""
@@ -169,6 +174,9 @@ show_help() {
 }
 
 setup_cron() {
+    log_message "[INFO] Applying cron schedules from configuration..."
+
+    # 1. Cleanup Schedule
     if [[ "$ENABLE_AUTO_CLEANUP" == "true" || "$ENABLE_AUTO_CLEANUP" == true ]]; then
         local cron_cmd="$CLEANUP_CRON /usr/local/bin/$SCRIPT_NAME --cleanup >> /var/log/$UTILITY_NAME/cron.log 2>&1"
         local current_crontab
@@ -178,11 +186,10 @@ setup_cron() {
         new_crontab+=$'\n'"$cron_cmd"
         
         if ! echo "$current_crontab" | grep -qF "$cron_cmd"; then
-            log_message "[INFO] Updating crontab with automatic cleanup schedule ($CLEANUP_CRON)..."
             echo "$new_crontab" | sudo crontab -
-            log_message "[INFO] SUCCESS: Cron setup complete."
+            log_message "[INFO] SUCCESS: Cleanup schedule updated ($CLEANUP_CRON)."
         else
-            log_message "[INFO] Cron job for automatic cleanup is already up to date."
+            log_message "[INFO] Cleanup schedule is already up to date."
         fi
     else
         local current_crontab
@@ -190,7 +197,32 @@ setup_cron() {
         if echo "$current_crontab" | grep -qF "/usr/local/bin/$SCRIPT_NAME --cleanup"; then
             local new_crontab=$(echo "$current_crontab" | grep -vF "/usr/local/bin/$SCRIPT_NAME --cleanup")
             echo "$new_crontab" | sudo crontab -
-            log_message "[INFO] Automated cleanup is disabled in config. Removed from crontab."
+            log_message "[INFO] Automated cleanup disabled. Removed from crontab."
+        fi
+    fi
+
+    # 2. Image Update Schedule
+    if [[ "$ENABLE_AUTO_IMAGE_UPDATE" == "true" || "$ENABLE_AUTO_IMAGE_UPDATE" == true ]]; then
+        local update_cmd="$IMAGE_UPDATE_CRON /usr/local/bin/$SCRIPT_NAME -u -y >> /var/log/$UTILITY_NAME/cron.log 2>&1"
+        local current_crontab
+        current_crontab=$(sudo crontab -l 2>/dev/null || true)
+        
+        local new_crontab=$(echo "$current_crontab" | grep -vF "/usr/local/bin/$SCRIPT_NAME -u -y")
+        new_crontab+=$'\n'"$update_cmd"
+        
+        if ! echo "$current_crontab" | grep -qF "$update_cmd"; then
+            echo "$new_crontab" | sudo crontab -
+            log_message "[INFO] SUCCESS: Image update schedule updated ($IMAGE_UPDATE_CRON)."
+        else
+            log_message "[INFO] Image update schedule is already up to date."
+        fi
+    else
+        local current_crontab
+        current_crontab=$(sudo crontab -l 2>/dev/null || true)
+        if echo "$current_crontab" | grep -qF "/usr/local/bin/$SCRIPT_NAME -u -y"; then
+            local new_crontab=$(echo "$current_crontab" | grep -vF "/usr/local/bin/$SCRIPT_NAME -u -y")
+            echo "$new_crontab" | sudo crontab -
+            log_message "[INFO] Automated image update disabled. Removed from crontab."
         fi
     fi
 }
@@ -830,7 +862,7 @@ show_menu() {
     echo " [Maintenance & Automation]"
     echo "   3. Check Local Images for Available Updates"
     echo "   4. Run Automated System Cleanup (Prune)"
-    echo "   5. Configure Automated Cleanup Schedule (Cron)"
+    echo "   5. Configure Automated Schedules (Cron)"
     echo ""
     echo " [Advanced & Destructive]"
     echo "   6. Purge ALL Docker Installations & Volumes"

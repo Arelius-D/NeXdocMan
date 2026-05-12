@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.5  
+> **Version:** v2.6  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -94,6 +94,28 @@ CLEANUP_CRON="30 4 * * *"
 
 ---
 
+### `[ENABLE_AUTO_IMAGE_UPDATE]` & `[IMAGE_UPDATE_CRON]`
+
+Controls the automated checking, pulling, and recreation of Docker containers when new images are available.
+*Note: This operates completely independently of the cleanup cron.*
+
+**How it works:**
+
+- `ENABLE_AUTO_IMAGE_UPDATE`: Set to `true` to activate the automated container updater (Disabled by default).
+- `IMAGE_UPDATE_CRON`: Standard cron syntax. Dictates exactly when the update sequence initiates.
+
+**Examples:**
+
+```ini
+# Every Sunday at 4:00 AM (Default if enabled)
+IMAGE_UPDATE_CRON="0 4 * * 0"
+
+# Every day at 2:00 AM
+IMAGE_UPDATE_CRON="0 2 * * *"
+```
+
+---
+
 ### `[LOG_LEVEL]` (Verbosity Control)
 
 **Control what gets written to `nexdocman.log`.**
@@ -143,7 +165,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.5/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.6/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -152,7 +174,7 @@ cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 **Option B: Using wget**
 
 ```bash
-wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.5/NeXdocMan.tar.gz && \
+wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.6/NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -172,7 +194,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐳 NeXdocMan - Docker Manager (v2.5)
+ 🐳 NeXdocMan - Docker Manager (v2.6)
 ==================================================
 
  [Core Operations]
