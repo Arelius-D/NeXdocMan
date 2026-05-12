@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.6  
+> **Version:** v2.7  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -69,6 +69,9 @@ NeXdocMan follows a strict execution pipeline to ensure system integrity:
 ## 4. Configuration Guide
 
 NeXdocMan is heavily controlled via `nexdocman.cfg`, auto-generated in `/usr/local/lib/nexdocman/` upon initial deployment.
+
+> [!IMPORTANT]
+> **Activation Required:** The config file determines *how* and *when* automation runs, but the schedules are not active until you inject them into the system. After editing your config (or installing for the first time), you MUST run `sudo nexdocman -C` (or TUI Option 5) to officially apply your schedules!
 
 ### `[ENABLE_AUTO_CLEANUP]` & `[CLEANUP_CRON]`
 
@@ -165,7 +168,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.6/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.7/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -174,7 +177,7 @@ cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 **Option B: Using wget**
 
 ```bash
-wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.6/NeXdocMan.tar.gz && \
+wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.7/NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -194,7 +197,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐳 NeXdocMan - Docker Manager (v2.6)
+ 🐳 NeXdocMan - Docker Manager (v2.7)
 ==================================================
 
  [Core Operations]
