@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.7"
+VERSION="v2.8"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -478,6 +478,136 @@ manage_logs() {
     fi
 }
 
+# MODULE: DASHBOARD & SURGICAL PRUNING
+docker_dashboard() {
+    clear
+    echo "=================================================="
+    echo " 🐳 NeXdocMan - Docker Status Dashboard"
+    echo "=================================================="
+    echo ""
+    
+    if [[ -n "$(sudo docker ps -q 2>/dev/null)" ]]; then
+        echo "[INFO] Running Containers:"
+        sudo docker ps --format '  {{.Names}}\t{{.Status}}' | column -t
+    else
+        echo "[INFO] No running containers"
+    fi
+    echo ""
+
+    if [[ -n "$(sudo docker ps -a -q --filter 'status=exited' --filter 'status=paused' 2>/dev/null)" ]]; then
+        echo "[INFO] Other Containers:"
+        sudo docker ps -a --filter 'status=exited' --filter 'status=paused' --format '  {{.Names}}\t{{if eq .State "exited"}}Exited{{else if eq .State "paused"}}Paused{{end}}' | awk '{printf "  %-15s (%s)\\n", $1, $2}' | column -t
+    else
+        echo "[INFO] No exited or paused containers"
+    fi
+    echo ""
+
+    if [[ -n "$(sudo docker images -q -f dangling=true 2>/dev/null)" ]]; then
+        echo "[INFO] Unused Images:"
+        sudo docker images -f "dangling=true" --format '  Repository: {{.Repository}}, Tag: {{.Tag}}, ID: {{.ID}}'
+    else
+        echo "[INFO] No unused images"
+    fi
+    echo ""
+
+    if [[ -n "$(sudo docker volume ls -qf dangling=true 2>/dev/null)" ]]; then
+        echo "[INFO] Unused Volumes:"
+        sudo docker volume ls -qf dangling=true --format '  Name: {{.Name}}'
+    else
+        echo "[INFO] No unused volumes"
+    fi
+    echo ""
+
+    local default_networks="bridge|host|none"
+    local all_networks
+    all_networks=$(sudo docker network ls --format '{{.Name}}' 2>/dev/null)
+    local used_networks
+    used_networks=$(sudo docker ps --format '{{.Networks}}' 2>/dev/null | tr ',' '\n' | sort | uniq)
+    local unused_networks
+    unused_networks=$(comm -23 <(echo "$all_networks" | sort) <(echo "$used_networks" | sort) | grep -Ev "^($default_networks)$")
+    
+    if [[ -n "$unused_networks" ]]; then
+        echo "[INFO] Unused Networks:"
+        echo "$unused_networks" | while read -r network; do
+            echo "  Name: $network, Driver: $(sudo docker network inspect "$network" --format '{{.Driver}}' 2>/dev/null)"
+        done
+    else
+        echo "[INFO] No unused networks"
+    fi
+    echo ""
+    echo "Press Enter to return to the menu..."
+    read -r
+}
+
+cleanup_logs() {
+    log_message "[INFO] Truncating massive Docker container JSON logs..."
+    sudo bash -c 'for log in /var/lib/docker/containers/*/*-json.log; do
+        if [ -f "$log" ]; then
+            truncate -s 0 "$log"
+        fi
+    done'
+    log_message "[SUCCESS] Docker container logs truncated to 0B."
+}
+
+cleanup_images() {
+    log_message "[INFO] Removing all unused images..."
+    sudo docker image prune -a -f 2>&1 | while read -r line; do log_message "[DEBUG] $line"; done
+    log_message "[SUCCESS] Unused images removed."
+}
+
+cleanup_volumes() {
+    log_message "[INFO] Removing all unused volumes..."
+    sudo docker volume prune -f 2>&1 | while read -r line; do log_message "[DEBUG] $line"; done
+    log_message "[SUCCESS] Unused volumes removed."
+}
+
+cleanup_networks() {
+    log_message "[INFO] Removing all unused networks..."
+    local default_networks="bridge|host|none"
+    local unused_networks
+    unused_networks=$(sudo docker network ls --format '{{.Name}}' --filter "dangling=true" | grep -Ev "^($default_networks)$")
+    if [[ -n "$unused_networks" ]]; then
+        for net in $unused_networks; do
+            sudo docker network rm "$net" >/dev/null 2>&1
+            log_message "[INFO] Removed network: $net"
+        done
+        log_message "[SUCCESS] Unused networks removed."
+    else
+        log_message "[INFO] No unused networks to remove."
+    fi
+}
+
+surgical_menu() {
+    while true; do
+        clear
+        echo "=================================================="
+        echo " 🐳 NeXdocMan - Dashboard & Surgical Pruning"
+        echo "=================================================="
+        echo ""
+        echo " [Information]"
+        echo "   1. View Live Docker Status Dashboard"
+        echo ""
+        echo " [Surgical Pruning]"
+        echo "   2. Prune Unused Images Only"
+        echo "   3. Prune Unused Volumes Only"
+        echo "   4. Prune Unused Networks Only"
+        echo "   5. Truncate Container JSON Logs to 0B"
+        echo ""
+        echo "   0. Return to Main Menu"
+        echo "--------------------------------------------------"
+        read -p "Choose an option [0-5]: " choice
+        case "$choice" in
+            1) docker_dashboard ;;
+            2) cleanup_images; echo "Press Enter to continue..."; read -r ;;
+            3) cleanup_volumes; echo "Press Enter to continue..."; read -r ;;
+            4) cleanup_networks; echo "Press Enter to continue..."; read -r ;;
+            5) cleanup_logs; echo "Press Enter to continue..."; read -r ;;
+            0) break ;;
+            *) echo "[ERROR] Invalid option."; sleep 1 ;;
+        esac
+    done
+}
+
 perform_cleanup() {
     log_message "[INFO] Performing a comprehensive system prune..."
     if ! command -v docker &>/dev/null; then
@@ -511,6 +641,7 @@ perform_cleanup() {
         log_message "[ERROR] Prune completed but failed to parse reclaimed space."
     fi
     
+    cleanup_logs
     manage_logs
 }
 
@@ -897,16 +1028,17 @@ show_menu() {
     echo ""
     echo " [Maintenance & Automation]"
     echo "   3. Check Local Images for Available Updates"
-    echo "   4. Run Automated System Cleanup (Prune)"
-    echo "   5. Apply / Update Automated Schedules (Cron)"
+    echo "   4. Dashboard & Surgical Pruning Menu"
+    echo "   5. Run Automated System Cleanup (Prune)"
+    echo "   6. Apply / Update Automated Schedules (Cron)"
     echo ""
     echo " [Advanced & Destructive]"
-    echo "   6. Purge ALL Docker Installations & Volumes"
-    echo "   7. Check and Update NeXdocMan Utility"
+    echo "   7. Purge ALL Docker Installations & Volumes"
+    echo "   8. Check and Update NeXdocMan Utility"
     echo ""
     echo "   0. Exit"
     echo "--------------------------------------------------"
-    echo -n "Choose an option [0-7]: "
+    echo -n "Choose an option [0-8]: "
 }
 
 if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ] || [ "$do_check_images" = true ] || [ "$do_update_images" = true ] || [ "$do_cleanup" = true ] || [ "$configure_cron" = true ] || [ "$initiate_install" = true ] || [ "$uninstall_utility_flag" = true ] || [ "$do_update_utility" = true ]; then
@@ -953,21 +1085,25 @@ else
                 ;;
             3)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                check_images false
+                check_images true
                 ;;
             4)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                perform_cleanup
+                surgical_menu
                 ;;
             5)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                setup_cron
+                perform_cleanup
                 ;;
             6)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                purge_docker
+                setup_cron
                 ;;
             7)
+                log_message "[INFO] Running $UTILITY_NAME $VERSION"
+                purge_docker
+                ;;
+            8)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
                 update_utility
                 ;;

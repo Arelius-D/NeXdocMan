@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.7  
+> **Version:** v2.8  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -168,7 +168,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.7/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.8/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -197,7 +197,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐳 NeXdocMan - Docker Manager (v2.7)
+ 🐳 NeXdocMan - Docker Manager (v2.8)
 ==================================================
 
  [Core Operations]
@@ -248,13 +248,38 @@ OPTIONS:
 
 **Examples:**
 
-```bash
-sudo nexdocman -d              # First-time setup on a new server
-sudo nexdocman -i -y           # Install Docker cleanly with no prompts
-nexdocman -c                   # Trigger an immediate runtime prune
-nexdocman -U                   # Check for and apply NeXdocMan utility updates
-sudo nexdocman -p -y           # Nuke and pave the entire Docker system silently
-```
+- `sudo nexdocman -d` : First-time setup on a new server
+- `sudo nexdocman -i -y` : Install Docker silently
+- `nexdocman -c` : Trigger an immediate runtime prune
+- `sudo nexdocman -C` : Reload the automated schedules
+- `nexdocman -r -y` : Uninstall NeXdocMan completely
+- `sudo nexdocman -p -y` : Purge ALL Docker data silently
+
+### The TUI (Terminal User Interface)
+
+Running `nexdocman` without any flags launches the interactive dashboard.
+
+From the v2.8 TUI, you now have access to a dedicated **Dashboard & Surgical Pruning Menu** (Option 4).
+
+#### 1. Live Docker Status Dashboard
+Instead of flying blind, you can view a clean, organized table of your entire Docker environment:
+- **Running Containers**: Lists names and real-time status.
+- **Other Containers**: Lists stopped, paused, or exited containers.
+- **Unused Images**: Lists dangling images taking up space.
+- **Unused Volumes**: Lists unattached volumes.
+- **Unused Networks**: Lists custom networks not currently attached to any container (ignoring default bridge/host networks).
+
+#### 2. Surgical Pruning
+Sometimes you don't want to run a full system prune. The Surgical Pruning menu allows you to target specific resources securely:
+- **Prune Unused Images Only**
+- **Prune Unused Volumes Only**
+- **Prune Unused Networks Only**
+
+#### 3. Container Log Management
+Docker Daemon JSON logs (`/var/lib/docker/containers/*/*.log`) can grow to massive sizes over time, eventually filling up your hard drive.
+NeXdocMan v2.8 introduces **Log Truncation**. 
+- You can trigger this manually via the Surgical Pruning menu.
+- **Automated**: This log truncation is also automatically integrated into the `--cleanup` cron job. Whenever NeXdocMan wakes up to prune your system, it will securely truncate these massive logs back to 0B without breaking your running containers.
 
 ---
 
