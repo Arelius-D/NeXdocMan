@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.8"
+VERSION="v2.8.1"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -32,6 +32,65 @@ if [ -f "$CFG_FILE" ]; then
     source "$CFG_FILE"
 fi
 
+# Display Docker status with improved formatting
+display_status() {
+    local DEFAULT_NETWORKS="bridge host none"
+
+    # Running containers
+    if [[ -n "$(sudo docker ps -q)" ]]; then
+        echo ""
+        echo "[INFO] Running Containers:"
+        sudo docker ps --format '  {{.Names}}\t{{.Status}}' | column -t
+    else
+        echo "[INFO] No running containers"
+    fi
+
+    echo ""  # Empty line for spacing
+
+    # Other containers (Exited, Paused)
+    if [[ -n "$(sudo docker ps -a -q --filter 'status=exited' --filter 'status=paused')" ]]; then
+        echo "[INFO] Other Containers:"
+        sudo docker ps -a --filter 'status=exited' --filter 'status=paused' --format '  {{.Names}}\t{{if eq .State "exited"}}Exited{{else if eq .State "paused"}}Paused{{end}}' | awk '{printf "  %-15s (%s)\n", $1, $2}' | column -t
+    else
+        echo "[INFO] No exited or paused containers"
+    fi
+
+    echo ""  # Empty line for spacing
+
+    # Unused Images
+    if [[ -n "$(sudo docker images -q -f dangling=true)" ]]; then
+        echo "[INFO] Unused Images:"
+        sudo docker images -f "dangling=true" --format '  Repository: {{.Repository}}, Tag: {{.Tag}}, ID: {{.ID}}'
+    else
+        echo "[INFO] No unused images"
+    fi
+
+    echo ""  # Empty line for spacing
+
+    # Unused Volumes
+    if [[ -n "$(sudo docker volume ls -qf dangling=true)" ]]; then
+        echo "[INFO] Unused Volumes:"
+        sudo docker volume ls -qf dangling=true --format '  Name: {{.Name}}'
+    else
+        echo "[INFO] No unused volumes"
+    fi
+
+    echo ""  # Empty line for spacing
+
+    # Unused Networks
+    local all_networks=$(sudo docker network ls --format '{{.Name}}')
+    local used_networks=$(sudo docker ps --format '{{.Networks}}' | tr ',' '\n' | sort | uniq)
+    local unused_networks=$(comm -23 <(echo "$all_networks" | sort) <(echo "$used_networks" | sort) | grep -Ev "^(${DEFAULT_NETWORKS// /|})$")
+    if [[ -n "$unused_networks" ]]; then
+        echo "[INFO] Unused Networks:"
+        echo "$unused_networks" | while read -r network; do
+            echo "  Name: $network, Driver: $(sudo docker network inspect $network --format '{{.Driver}}')"
+        done
+    else
+        echo "[INFO] No unused networks"
+    fi
+}
+
 # Helper to check log level
 level_to_num() {
     case "$1" in
@@ -58,11 +117,7 @@ log_message() {
 
     if [ "$msg_level_num" -ge "$current_level_num" ]; then
         local formatted_msg="[$(date '+%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME $VERSION] ${message}"
-        echo "$formatted_msg" | sudo tee -a "$LOG_FILE" >/dev/null
-        
-        if [ -t 1 ]; then
-            echo "${message}"
-        fi
+        echo "$formatted_msg" | sudo tee -a "$LOG_FILE"
     fi
 }
 
@@ -182,6 +237,7 @@ show_help() {
     echo ""
     echo "  [Docker Operations]"
     echo "  -i, --install        Install Docker and Docker Compose and set up groups."
+    echo "  -s, --status         Display Docker and resource status."
     echo "  -m, --manage         Check for Docker and Compose updates and apply them."
     echo "  -k, --check-images   Audit local Docker images for remote updates (Read-only)."
     echo "  -u, --update-images  Audit local Docker images and pull available updates."
@@ -193,6 +249,7 @@ show_help() {
     echo "EXAMPLES:"
     echo "  sudo $SCRIPT_NAME -d              # First-time setup on a new server"
     echo "  sudo $SCRIPT_NAME -i -y           # Install Docker cleanly with no prompts"
+    echo "  $SCRIPT_NAME -s                   # Display Docker and resource status"
     echo "  $SCRIPT_NAME -c                   # Trigger an immediate runtime prune"
     echo "  $SCRIPT_NAME -r -y                # Uninstall $UTILITY_NAME but leave Docker running"
     echo "  sudo $SCRIPT_NAME -p -y           # Nuke and pave the Docker system silently"
@@ -478,136 +535,6 @@ manage_logs() {
     fi
 }
 
-# MODULE: DASHBOARD & SURGICAL PRUNING
-docker_dashboard() {
-    clear
-    echo "=================================================="
-    echo " 🐳 NeXdocMan - Docker Status Dashboard"
-    echo "=================================================="
-    echo ""
-    
-    if [[ -n "$(sudo docker ps -q 2>/dev/null)" ]]; then
-        echo "[INFO] Running Containers:"
-        sudo docker ps --format '  {{.Names}}\t{{.Status}}' | column -t
-    else
-        echo "[INFO] No running containers"
-    fi
-    echo ""
-
-    if [[ -n "$(sudo docker ps -a -q --filter 'status=exited' --filter 'status=paused' 2>/dev/null)" ]]; then
-        echo "[INFO] Other Containers:"
-        sudo docker ps -a --filter 'status=exited' --filter 'status=paused' --format '  {{.Names}}\t{{if eq .State "exited"}}Exited{{else if eq .State "paused"}}Paused{{end}}' | awk '{printf "  %-15s (%s)\\n", $1, $2}' | column -t
-    else
-        echo "[INFO] No exited or paused containers"
-    fi
-    echo ""
-
-    if [[ -n "$(sudo docker images -q -f dangling=true 2>/dev/null)" ]]; then
-        echo "[INFO] Unused Images:"
-        sudo docker images -f "dangling=true" --format '  Repository: {{.Repository}}, Tag: {{.Tag}}, ID: {{.ID}}'
-    else
-        echo "[INFO] No unused images"
-    fi
-    echo ""
-
-    if [[ -n "$(sudo docker volume ls -qf dangling=true 2>/dev/null)" ]]; then
-        echo "[INFO] Unused Volumes:"
-        sudo docker volume ls -qf dangling=true --format '  Name: {{.Name}}'
-    else
-        echo "[INFO] No unused volumes"
-    fi
-    echo ""
-
-    local default_networks="bridge|host|none"
-    local all_networks
-    all_networks=$(sudo docker network ls --format '{{.Name}}' 2>/dev/null)
-    local used_networks
-    used_networks=$(sudo docker ps --format '{{.Networks}}' 2>/dev/null | tr ',' '\n' | sort | uniq)
-    local unused_networks
-    unused_networks=$(comm -23 <(echo "$all_networks" | sort) <(echo "$used_networks" | sort) | grep -Ev "^($default_networks)$")
-    
-    if [[ -n "$unused_networks" ]]; then
-        echo "[INFO] Unused Networks:"
-        echo "$unused_networks" | while read -r network; do
-            echo "  Name: $network, Driver: $(sudo docker network inspect "$network" --format '{{.Driver}}' 2>/dev/null)"
-        done
-    else
-        echo "[INFO] No unused networks"
-    fi
-    echo ""
-    echo "Press Enter to return to the menu..."
-    read -r
-}
-
-cleanup_logs() {
-    log_message "[INFO] Truncating massive Docker container JSON logs..."
-    sudo bash -c 'for log in /var/lib/docker/containers/*/*-json.log; do
-        if [ -f "$log" ]; then
-            truncate -s 0 "$log"
-        fi
-    done'
-    log_message "[SUCCESS] Docker container logs truncated to 0B."
-}
-
-cleanup_images() {
-    log_message "[INFO] Removing all unused images..."
-    sudo docker image prune -a -f 2>&1 | while read -r line; do log_message "[DEBUG] $line"; done
-    log_message "[SUCCESS] Unused images removed."
-}
-
-cleanup_volumes() {
-    log_message "[INFO] Removing all unused volumes..."
-    sudo docker volume prune -f 2>&1 | while read -r line; do log_message "[DEBUG] $line"; done
-    log_message "[SUCCESS] Unused volumes removed."
-}
-
-cleanup_networks() {
-    log_message "[INFO] Removing all unused networks..."
-    local default_networks="bridge|host|none"
-    local unused_networks
-    unused_networks=$(sudo docker network ls --format '{{.Name}}' --filter "dangling=true" | grep -Ev "^($default_networks)$")
-    if [[ -n "$unused_networks" ]]; then
-        for net in $unused_networks; do
-            sudo docker network rm "$net" >/dev/null 2>&1
-            log_message "[INFO] Removed network: $net"
-        done
-        log_message "[SUCCESS] Unused networks removed."
-    else
-        log_message "[INFO] No unused networks to remove."
-    fi
-}
-
-surgical_menu() {
-    while true; do
-        clear
-        echo "=================================================="
-        echo " 🐳 NeXdocMan - Dashboard & Surgical Pruning"
-        echo "=================================================="
-        echo ""
-        echo " [Information]"
-        echo "   1. View Live Docker Status Dashboard"
-        echo ""
-        echo " [Surgical Pruning]"
-        echo "   2. Prune Unused Images Only"
-        echo "   3. Prune Unused Volumes Only"
-        echo "   4. Prune Unused Networks Only"
-        echo "   5. Truncate Container JSON Logs to 0B"
-        echo ""
-        echo "   0. Return to Main Menu"
-        echo "--------------------------------------------------"
-        read -p "Choose an option [0-5]: " choice
-        case "$choice" in
-            1) docker_dashboard ;;
-            2) cleanup_images; echo "Press Enter to continue..."; read -r ;;
-            3) cleanup_volumes; echo "Press Enter to continue..."; read -r ;;
-            4) cleanup_networks; echo "Press Enter to continue..."; read -r ;;
-            5) cleanup_logs; echo "Press Enter to continue..."; read -r ;;
-            0) break ;;
-            *) echo "[ERROR] Invalid option."; sleep 1 ;;
-        esac
-    done
-}
-
 perform_cleanup() {
     log_message "[INFO] Performing a comprehensive system prune..."
     if ! command -v docker &>/dev/null; then
@@ -641,7 +568,6 @@ perform_cleanup() {
         log_message "[ERROR] Prune completed but failed to parse reclaimed space."
     fi
     
-    cleanup_logs
     manage_logs
 }
 
@@ -802,8 +728,10 @@ check_update() {
                 exit 1
             fi
             new_docker_ver=$(docker --version | cut -d' ' -f3- | sed 's/,//')
+            clean_docker_ver=$(echo "$docker_ver" | cut -d' ' -f3- | sed 's/,//')
             new_compose_ver=$(docker compose version | cut -d' ' -f4-)
-            if [ "$docker_ver" != "Docker version $new_docker_ver" ] || [ "$compose_ver" != "Docker Compose version $new_compose_ver" ]; then
+            
+            if [ "$clean_docker_ver" != "$new_docker_ver" ] || [ "$compose_ver" != "Docker Compose version $new_compose_ver" ]; then
                 log_message "[INFO] SUCCESS: Docker updated to $new_docker_ver"
                 log_message "[INFO] SUCCESS: Docker Compose updated to $new_compose_ver"
             else
@@ -826,8 +754,7 @@ check_images() {
     
     for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>'); do
         local local_digest
-        local_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$img" 2>/dev/null | grep -o 'sha256:.*')
-
+        local_digest=$(docker inspect --format='{{if gt (len .RepoDigests) 0}}{{index .RepoDigests 0}}{{end}}' "$img" 2>/dev/null | grep -o 'sha256:.*')
         local remote_digest
         remote_digest=$(docker buildx imagetools inspect "$img" 2>/dev/null | grep "^Digest:" | head -n 1 | awk '{print $2}')
         
@@ -890,10 +817,13 @@ check_images() {
                         local c_name=$(docker inspect --format '{{.Name}}' "$c_id" | sed 's/^\///')
                         local compose_dir=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$c_id" 2>/dev/null)
                         local compose_service=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$c_id" 2>/dev/null)
-                        
+                        local compose_file=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$c_id" 2>/dev/null)
+
                         if [ -n "$compose_dir" ] && [ -n "$compose_service" ]; then
                             log_message "[INFO] Recreating Compose service: $compose_service ($c_name)..."
-                            if (cd "$compose_dir" && sudo docker compose up -d --no-deps "$compose_service"); then
+                            local compose_cmd="sudo docker compose"
+                            [ -n "$compose_file" ] && compose_cmd+=" -f $compose_file"
+                            if (cd "$compose_dir" && $compose_cmd up -d --no-deps "$compose_service"); then
                                 log_message "[INFO] SUCCESS: $c_name recreated."
                             else
                                 log_message "[ERROR] Failed to recreate $c_name."
@@ -985,6 +915,7 @@ fi
 setup_dirs
 
 do_install=false
+do_status=false
 do_purge=false
 do_manage=false
 initiate_install=false
@@ -1002,6 +933,7 @@ while [[ "$#" -gt 0 ]]; do
         -h|--help) show_help; exit 0 ;;
         -V|--verbose) VERBOSE=true ;;
         -i|--install) do_install=true ;;
+        -s|--status) do_status=true ;;
         -p|--purge) do_purge=true ;;
         -m|--manage) do_manage=true ;;
         -k|--check-images) do_check_images=true ;;
@@ -1025,10 +957,10 @@ show_menu() {
     echo " [Core Operations]"
     echo "   1. Install Docker & Docker Compose"
     echo "   2. Check and Update Docker & Docker Compose"
+    echo "   3. Display Docker & Resource Status"
     echo ""
     echo " [Maintenance & Automation]"
-    echo "   3. Check Local Images for Available Updates"
-    echo "   4. Dashboard & Surgical Pruning Menu"
+    echo "   4. Check Local Images for Available Updates"
     echo "   5. Run Automated System Cleanup (Prune)"
     echo "   6. Apply / Update Automated Schedules (Cron)"
     echo ""
@@ -1041,14 +973,16 @@ show_menu() {
     echo -n "Choose an option [0-8]: "
 }
 
-if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ] || [ "$do_check_images" = true ] || [ "$do_update_images" = true ] || [ "$do_cleanup" = true ] || [ "$configure_cron" = true ] || [ "$initiate_install" = true ] || [ "$uninstall_utility_flag" = true ] || [ "$do_update_utility" = true ]; then
+if [ "$do_install" = true ] || [ "$do_status" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ] || [ "$do_check_images" = true ] || [ "$do_update_images" = true ] || [ "$do_cleanup" = true ] || [ "$configure_cron" = true ] || [ "$initiate_install" = true ] || [ "$uninstall_utility_flag" = true ] || [ "$do_update_utility" = true ]; then
     log_message "[INFO] Running $UTILITY_NAME $VERSION"
     if [ "$do_purge" = true ] && [ "$do_manage" = true ]; then
         log_message "[ERROR] Cannot use --purge and --manage together!"
         exit 1
     fi
     
-    if [ "$do_install" = true ]; then
+    if [ "$do_status" = true ]; then
+        display_status
+    elif [ "$do_install" = true ]; then
         setup_docker
     elif [ "$do_purge" = true ]; then
         purge_docker
@@ -1073,7 +1007,7 @@ if [ "$do_install" = true ] || [ "$do_purge" = true ] || [ "$do_manage" = true ]
 else
     while true; do
         show_menu
-        read choice
+        read choice || exit 0
         case $choice in
             1)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
@@ -1085,11 +1019,11 @@ else
                 ;;
             3)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                check_images true
+                display_status
                 ;;
             4)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                surgical_menu
+                check_images false
                 ;;
             5)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
@@ -1116,7 +1050,7 @@ else
                 ;;
         esac
         echo "Press any key to continue..."
-        read -n 1 -s
+        read -n 1 -s || exit 0
         clear
     done
 fi

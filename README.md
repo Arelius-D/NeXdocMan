@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.8  
+> **Version:** v2.8.1  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -49,6 +49,13 @@ Managing the manager shouldn't be a chore.
 
 - **The Problem:** Keeping your deployment tools updated manually usually involves re-downloading and manual overwriting.
 - **The NeXdocMan Solution:** NeXdocMan can now update itself. By polling the GitHub API, it detects when a new version of the utility is released and offers a one-click automated update path that re-deploys the latest binary globally.
+
+### F. Intelligent Status Auditing (Unified Container & Resource Reports)
+
+Active Docker hosts require constant auditing to know what services are active and where resources are being leaked.
+
+- **The Problem:** Running multiple individual Docker inspection commands to check active services, stopped containers, dangling images, unused volumes, and orphaned networks is tedious.
+- **The NeXdocMan Solution:** With its custom `display_status` module, NeXdocMan instantly provides a formatted, unified report of running containers, exited/paused container states, dangling images, unused volumes, and orphaned custom network drivers.
 
 ---
 
@@ -168,7 +175,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.8/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.8.1/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -177,7 +184,7 @@ cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 **Option B: Using wget**
 
 ```bash
-wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.7/NeXdocMan.tar.gz && \
+wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.8.1/NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -197,25 +204,26 @@ nexdocman
 
 ```text
 ==================================================
- 🐳 NeXdocMan - Docker Manager (v2.8)
+ 🐳 NeXdocMan - Docker Manager (v2.8.1)
 ==================================================
 
  [Core Operations]
    1. Install Docker & Docker Compose
    2. Check and Update Docker & Docker Compose
+   3. Display Docker & Resource Status
 
  [Maintenance & Automation]
-   3. Check Local Images for Available Updates
-   4. Run Automated System Cleanup (Prune)
-   5. Configure Automated Cleanup Schedule (Cron)
+   4. Check Local Images for Available Updates
+   5. Run Automated System Cleanup (Prune)
+   6. Apply / Update Automated Schedules (Cron)
 
  [Advanced & Destructive]
-   6. Purge ALL Docker Installations & Volumes
-   7. Check and Update NeXdocMan Utility
+   7. Purge ALL Docker Installations & Volumes
+   8. Check and Update NeXdocMan Utility
 
    0. Exit
 --------------------------------------------------
-Choose an option [0-7]:
+Choose an option [0-8]:
 ```
 
 ### Automation CLI Mode:
@@ -232,54 +240,31 @@ OPTIONS:
   -V, --verbose        Run operations with verbose output to terminal.
 
   [Deployment & Removal]
-  -d, --deploy         Initialize directories, config, and deploy nexdocman globally.
-  -r, --remove         Uninstall nexdocman, its logs, configs, and schedules entirely.
+  -d, --deploy         Initialize directories, config, and deploy NeXdocMan globally.
+  -r, --remove         Uninstall NeXdocMan, its logs, configs, and schedules entirely.
 
   [Docker Operations]
   -i, --install        Install Docker and Docker Compose and set up groups.
+  -s, --status         Display Docker and resource status.
   -m, --manage         Check for Docker and Compose updates and apply them.
   -k, --check-images   Audit local Docker images for remote updates (Read-only).
-  -u, --update-images  Audit local Docker images, pull updates, and recreate containers.
+  -u, --update-images  Audit local Docker images and pull available updates.
   -c, --cleanup        Manually trigger a deep Docker system prune.
-  -C, --configure-cron Reload the automated prune schedule from nexdocman.cfg.
+  -C, --configure-cron Apply or Reload the automated schedules from nexdocman.cfg.
   -p, --purge          Completely uninstall Docker, Compose, and wipe all data.
   -U, --update-utility Check for and apply updates to NeXdocMan utility.
 ```
 
 **Examples:**
 
-- `sudo nexdocman -d` : First-time setup on a new server
-- `sudo nexdocman -i -y` : Install Docker silently
-- `nexdocman -c` : Trigger an immediate runtime prune
-- `sudo nexdocman -C` : Reload the automated schedules
-- `nexdocman -r -y` : Uninstall NeXdocMan completely
-- `sudo nexdocman -p -y` : Purge ALL Docker data silently
-
-### The TUI (Terminal User Interface)
-
-Running `nexdocman` without any flags launches the interactive dashboard.
-
-From the v2.8 TUI, you now have access to a dedicated **Dashboard & Surgical Pruning Menu** (Option 4).
-
-#### 1. Live Docker Status Dashboard
-Instead of flying blind, you can view a clean, organized table of your entire Docker environment:
-- **Running Containers**: Lists names and real-time status.
-- **Other Containers**: Lists stopped, paused, or exited containers.
-- **Unused Images**: Lists dangling images taking up space.
-- **Unused Volumes**: Lists unattached volumes.
-- **Unused Networks**: Lists custom networks not currently attached to any container (ignoring default bridge/host networks).
-
-#### 2. Surgical Pruning
-Sometimes you don't want to run a full system prune. The Surgical Pruning menu allows you to target specific resources securely:
-- **Prune Unused Images Only**
-- **Prune Unused Volumes Only**
-- **Prune Unused Networks Only**
-
-#### 3. Container Log Management
-Docker Daemon JSON logs (`/var/lib/docker/containers/*/*.log`) can grow to massive sizes over time, eventually filling up your hard drive.
-NeXdocMan v2.8 introduces **Log Truncation**. 
-- You can trigger this manually via the Surgical Pruning menu.
-- **Automated**: This log truncation is also automatically integrated into the `--cleanup` cron job. Whenever NeXdocMan wakes up to prune your system, it will securely truncate these massive logs back to 0B without breaking your running containers.
+```bash
+sudo nexdocman -d              # First-time setup on a new server
+sudo nexdocman -i -y           # Install Docker cleanly with no prompts
+nexdocman -s                   # Display Docker and resource status
+nexdocman -c                   # Trigger an immediate runtime prune
+nexdocman -r -y                # Uninstall NeXdocMan but leave Docker running
+sudo nexdocman -p -y           # Nuke and pave the Docker system silently
+```
 
 ---
 
@@ -302,7 +287,7 @@ NeXdocMan v2.8 introduces **Log Truncation**.
 **A:** Check the execution logs natively via:
 
 ```bash
-cat /var/log/NeXdocMan/nexdocman.log | grep "PRUNE DETAILED"
+cat /var/log/NeXdocMan/nexdocman.log | grep "PRUNE SUMMARY"
 ```
 
 You will see exactly how many items were untagged and deleted, and the exact megabytes (or gigabytes) of space reclaimed.
