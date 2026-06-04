@@ -4,10 +4,11 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.8.1"
+VERSION="v2.9"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
+CRON_LOG_FILE="$LOG_DIR/${SCRIPT_NAME}_cron.log"
 SYSTEM_DIR="/usr/local/lib/nexdocman"
 CFG_FILE="$SYSTEM_DIR/${SCRIPT_NAME}.cfg"
 
@@ -26,6 +27,7 @@ LOGPRUNE_MAX_AGE_DAYS=7
 
 ENABLE_AUTO_IMAGE_UPDATE=false
 IMAGE_UPDATE_CRON="0 4 * * 0"
+EXCLUDE_CONTAINERS=""
 
 # Load config if exists
 if [ -f "$CFG_FILE" ]; then
@@ -102,6 +104,23 @@ level_to_num() {
     esac
 }
 
+is_excluded() {
+    local c_name="$1"
+    local img_name="$2"
+
+    [ -z "${EXCLUDE_CONTAINERS}" ] && return 1
+
+    # Replace all commas with spaces to handle spacing inconsistencies and split
+    local exclude_clean="${EXCLUDE_CONTAINERS//,/ }"
+
+    for item in $exclude_clean; do
+        if [[ "$c_name" == $item ]] || [[ "$img_name" == $item ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 log_message() {
     local level="INFO"
     local message="$1"
@@ -132,7 +151,12 @@ run_command() {
     fi
     local exit_code=${PIPESTATUS[0]}
     
-    if [ "$(level_to_num "$LOG_LEVEL")" -le 0 ]; then
+    if [ "$exit_code" -ne 0 ]; then
+        log_message "[ERROR] Command failed with exit code $exit_code: $*"
+        while IFS= read -r line; do
+            [ -n "$line" ] && log_message "[ERROR]   $line"
+        done < "$temp_out"
+    elif [ "$(level_to_num "$LOG_LEVEL")" -le 0 ]; then
         log_message "[DEBUG] Executing: $*"
         while IFS= read -r line; do
             [ -n "$line" ] && log_message "[DEBUG]   $line"
@@ -153,6 +177,22 @@ setup_dirs() {
         sudo chmod 644 "$LOG_FILE"
         sudo chown root:root "$LOG_FILE"
     fi
+    if [ ! -f "$CRON_LOG_FILE" ]; then
+        sudo touch "$CRON_LOG_FILE"
+        sudo chmod 644 "$CRON_LOG_FILE"
+        sudo chown root:root "$CRON_LOG_FILE"
+    fi
+
+    # Migrate legacy cron.log to ${CRON_LOG_FILE}.bak if it exists
+    if [ -f "$LOG_DIR/cron.log" ] && [ "$LOG_DIR/cron.log" != "$CRON_LOG_FILE" ]; then
+        log_message "[INFO] Migrating legacy log file: $LOG_DIR/cron.log -> ${CRON_LOG_FILE}.bak"
+        if [ -f "${CRON_LOG_FILE}.bak" ]; then
+            sudo bash -c "cat '$LOG_DIR/cron.log' >> '${CRON_LOG_FILE}.bak'"
+            sudo rm -f "$LOG_DIR/cron.log"
+        else
+            sudo mv "$LOG_DIR/cron.log" "${CRON_LOG_FILE}.bak"
+        fi
+    fi
 }
 
 manage_configuration() {
@@ -166,6 +206,13 @@ manage_configuration() {
         log_message "[INFO] Backup created at ${CFG_FILE}.bak"
     fi
     
+    local exclude_line
+    if [ -n "$EXCLUDE_CONTAINERS" ]; then
+        exclude_line="EXCLUDE_CONTAINERS=\"$EXCLUDE_CONTAINERS\""
+    else
+        exclude_line="#EXCLUDE_CONTAINERS=\"\""
+    fi
+
     # Generate the new config, injecting variables from memory
     sudo bash -c "cat > $CFG_FILE" <<EOF
 # ==============================================================================
@@ -193,13 +240,27 @@ ENABLE_AUTO_IMAGE_UPDATE=$ENABLE_AUTO_IMAGE_UPDATE
 # Default: '0 4 * * 0' (Every Sunday at 4:00 AM)
 IMAGE_UPDATE_CRON="$IMAGE_UPDATE_CRON"
 
+# [EXCLUDE_CONTAINERS]
+# Comma-separated list of container names, image names, or glob patterns to
+# exclude from automated updates. Uncomment and define to activate.
+# Example: EXCLUDE_CONTAINERS="pihole,production_db,mysql:8.0,db_*"
+$exclude_line
+
+# [LOG_FILE]
+# The primary log file where operational events are recorded.
+LOG_FILE="$LOG_FILE"
+
+# [CRON_LOG_FILE]
+# The log file where cron execution output is redirected.
+CRON_LOG_FILE="$CRON_LOG_FILE"
+
 # [LOG_LEVEL]
-# Define the verbosity of the logging output written to /var/log/NeXdocMan/nexdocman.log.
+# Define the verbosity of the logging output written to the primary log file.
 # Options: DEBUG, INFO, WARNING, ERROR
 LOG_LEVEL="$LOG_LEVEL"
 
 # [LOGPRUNE]
-# Automatically clean old entries from /var/log/NeXdocMan/nexdocman.log.
+# Automatically clean old entries from the log files.
 LOGPRUNE_ENABLED=$LOGPRUNE_ENABLED
 LOGPRUNE_MAX_AGE_DAYS=$LOGPRUNE_MAX_AGE_DAYS
 EOF
@@ -262,7 +323,7 @@ setup_cron() {
 
     # 1. Cleanup Schedule
     if [[ "$ENABLE_AUTO_CLEANUP" == "true" || "$ENABLE_AUTO_CLEANUP" == true ]]; then
-        local cron_cmd="$CLEANUP_CRON /usr/local/bin/$SCRIPT_NAME --cleanup >> /var/log/$UTILITY_NAME/cron.log 2>&1"
+        local cron_cmd="$CLEANUP_CRON /usr/local/bin/$SCRIPT_NAME --cleanup >> $CRON_LOG_FILE 2>&1"
         local current_crontab
         current_crontab=$(sudo crontab -l 2>/dev/null || true)
         
@@ -287,7 +348,7 @@ setup_cron() {
 
     # 2. Image Update Schedule
     if [[ "$ENABLE_AUTO_IMAGE_UPDATE" == "true" || "$ENABLE_AUTO_IMAGE_UPDATE" == true ]]; then
-        local update_cmd="$IMAGE_UPDATE_CRON /usr/local/bin/$SCRIPT_NAME -u -y >> /var/log/$UTILITY_NAME/cron.log 2>&1"
+        local update_cmd="$IMAGE_UPDATE_CRON /usr/local/bin/$SCRIPT_NAME -u -y >> $CRON_LOG_FILE 2>&1"
         local current_crontab
         current_crontab=$(sudo crontab -l 2>/dev/null || true)
         
@@ -479,28 +540,18 @@ update_utility() {
 }
 
 # MODULE: CLEANUP & LOG MANAGEMENT
-manage_logs() {
-    if [[ "$LOGPRUNE_ENABLED" != "true" && "$LOGPRUNE_ENABLED" != true ]]; then
-        log_message "[INFO] Log pruning is disabled in config. Skipping."
-        return 0
-    fi
+prune_single_log_file() {
+    local target_file="$1"
+    local max_days="$2"
+    local cutoff_str="$3"
 
-    if [ ! -f "$LOG_FILE" ] || [ ! -s "$LOG_FILE" ]; then 
-        return 0
-    fi
-
-    local max_days="${LOGPRUNE_MAX_AGE_DAYS:-7}"
-    local CUTOFF_STRING
-    CUTOFF_STRING=$(LC_ALL=C date -d "$max_days days ago" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)
-    
-    if [ -z "$CUTOFF_STRING" ]; then
-        log_message "[ERROR] Failed to calculate cutoff date for log management."
+    if [ ! -f "$target_file" ] || [ ! -s "$target_file" ]; then
         return 0
     fi
 
     local TEMP_FILE=$(mktemp)
 
-    LC_ALL=C awk -v cutoff_str="$CUTOFF_STRING" '
+    LC_ALL=C awk -v cutoff_str="$cutoff_str" '
     {
         if (match($0, /^\[([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2})\]/)) {
             timestamp = substr($0, 2, 19)
@@ -515,24 +566,43 @@ manage_logs() {
                 print $0
             }
         }
-    }' "$LOG_FILE" > "$TEMP_FILE"
+    }' "$target_file" > "$TEMP_FILE"
 
-    if [ ! -s "$TEMP_FILE" ] && [ -s "$LOG_FILE" ]; then
-        log_message "[WARNING] Log pruning resulted in an empty file. Keeping original log."
+    if [ ! -s "$TEMP_FILE" ] && [ -s "$target_file" ]; then
+        log_message "[WARNING] Log pruning resulted in an empty file for $(basename "$target_file"). Keeping original log."
         rm -f "$TEMP_FILE"
         return 0
     fi
 
-    local lines_before=$(wc -l < "$LOG_FILE")
+    local lines_before=$(wc -l < "$target_file")
     local lines_after=$(wc -l < "$TEMP_FILE")
     local lines_pruned=$((lines_before - lines_after))
 
-    sudo mv "$TEMP_FILE" "$LOG_FILE"
-    sudo chmod 644 "$LOG_FILE"
+    sudo mv "$TEMP_FILE" "$target_file"
+    sudo chmod 644 "$target_file"
     
     if [ "$lines_pruned" -gt 0 ]; then
-        log_message "[INFO] Pruned $lines_pruned log lines older than $max_days days."
+        log_message "[INFO] Pruned $lines_pruned log lines older than $max_days days from $(basename "$target_file")."
     fi
+}
+
+manage_logs() {
+    if [[ "$LOGPRUNE_ENABLED" != "true" && "$LOGPRUNE_ENABLED" != true ]]; then
+        log_message "[INFO] Log pruning is disabled in config. Skipping."
+        return 0
+    fi
+
+    local max_days="${LOGPRUNE_MAX_AGE_DAYS:-7}"
+    local CUTOFF_STRING
+    CUTOFF_STRING=$(LC_ALL=C date -d "$max_days days ago" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)
+    
+    if [ -z "$CUTOFF_STRING" ]; then
+        log_message "[ERROR] Failed to calculate cutoff date for log management."
+        return 0
+    fi
+
+    prune_single_log_file "$LOG_FILE" "$max_days" "$CUTOFF_STRING"
+    prune_single_log_file "$CRON_LOG_FILE" "$max_days" "$CUTOFF_STRING"
 }
 
 perform_cleanup() {
@@ -773,14 +843,43 @@ check_images() {
         fi
 
         if [ "$has_update" = true ]; then
-            images_to_update+=("$img")
-            ((update_count++))
-            # Track containers using this image
-            while read -r c_id; do
-                if [[ ! " ${containers_to_recreate[@]} " =~ " ${c_id} " ]]; then
-                    containers_to_recreate+=("$c_id")
+            local active_containers
+            active_containers=$(docker ps --filter "ancestor=$img" --format '{{.ID}}')
+            
+            local should_update_image=true
+            if [ -n "$active_containers" ]; then
+                local all_excluded=true
+                while read -r c_id; do
+                    [ -z "$c_id" ] && continue
+                    local c_name=$(docker inspect --format '{{.Name}}' "$c_id" 2>/dev/null | sed 's/^\///')
+                    if ! is_excluded "$c_name" "$img"; then
+                        all_excluded=false
+                        break
+                    fi
+                done <<< "$active_containers"
+                
+                if [ "$all_excluded" = true ]; then
+                    should_update_image=false
+                    log_message "[INFO] SKIP: $img (all active containers running it are excluded)."
                 fi
-            done < <(docker ps --filter "ancestor=$img" --format '{{.ID}}')
+            fi
+            
+            if [ "$should_update_image" = true ]; then
+                images_to_update+=("$img")
+                ((update_count++))
+                
+                while read -r c_id; do
+                    [ -z "$c_id" ] && continue
+                    local c_name=$(docker inspect --format '{{.Name}}' "$c_id" 2>/dev/null | sed 's/^\///')
+                    if ! is_excluded "$c_name" "$img"; then
+                        if [[ ! " ${containers_to_recreate[@]} " =~ " ${c_id} " ]]; then
+                            containers_to_recreate+=("$c_id")
+                        fi
+                    else
+                        log_message "[INFO] EXCLUDE: Skipping container '$c_name' ($img) - matched auto-update blocklist."
+                    fi
+                done <<< "$active_containers"
+            fi
         fi
     done
     
@@ -823,7 +922,7 @@ check_images() {
                             log_message "[INFO] Recreating Compose service: $compose_service ($c_name)..."
                             local compose_cmd="sudo docker compose"
                             [ -n "$compose_file" ] && compose_cmd+=" -f $compose_file"
-                            if (cd "$compose_dir" && $compose_cmd up -d --no-deps "$compose_service"); then
+                            if run_command bash -c "cd \"$compose_dir\" && $compose_cmd up -d --no-deps \"$compose_service\""; then
                                 log_message "[INFO] SUCCESS: $c_name recreated."
                             else
                                 log_message "[ERROR] Failed to recreate $c_name."

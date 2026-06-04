@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.8.1  
+> **Version:** v2.9  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -28,7 +28,7 @@ Active Docker environments accumulate dead containers, dangling images, and orph
 
 Setup scripts usually spit output into the terminal and vanish. If an installation fails or a cron job errors out during the night, you have no idea why.
 
-- **The NeXdocMan Solution:** Every action—whether a manual TUI sequence or a silent cron execution—is strictly logged to `/var/log/NeXdocMan/nexdocman.log`. Through the customizable `[LOG_LEVEL]` and `[LOGPRUNE]` mechanisms, NeXdocMan acts as its own auditor, logging specific events and automatically deleting events older than your defined threshold to preserve disk space.
+- **The NeXdocMan Solution:** Every action—whether a manual TUI sequence or a silent cron execution—is strictly logged. Operational logs are written to `/var/log/NeXdocMan/nexdocman.log`, and cron execution output is redirected to `/var/log/NeXdocMan/nexdocman_cron.log`. Through the customizable `[LOG_LEVEL]` and `[LOGPRUNE]` mechanisms, NeXdocMan acts as its own auditor, logging specific events and automatically deleting events older than your defined threshold to preserve disk space.
 
 ### C. True Agnostic Execution (Dynamic Intelligence)
 
@@ -56,6 +56,13 @@ Active Docker hosts require constant auditing to know what services are active a
 
 - **The Problem:** Running multiple individual Docker inspection commands to check active services, stopped containers, dangling images, unused volumes, and orphaned networks is tedious.
 - **The NeXdocMan Solution:** With its custom `display_status` module, NeXdocMan instantly provides a formatted, unified report of running containers, exited/paused container states, dangling images, unused volumes, and orphaned custom network drivers.
+
+### G. The Zero-Overhead Alternative to Watchtower (Simplicity vs. Daemon Bloat)
+
+Automating container updates traditionally requires deploying background update daemons like Watchtower.
+
+- **The Problem:** Watchtower runs as a continuous, memory-consuming container daemon on your system. Moreover, the project has seen very little active maintenance or development for the past two years, presenting potential security and maintenance risks over time.
+- **The NeXdocMan Solution:** NeXdocMan completely, safely, and cleanly replaces background update daemons with virtually **zero runtime overhead**. Because it runs as a cron-triggered utility, it executes its tasks swiftly and shuts down immediately, leaving no persistent background processes. It utilizes a simpler yet highly sophisticated local orchestration logic: it queries remote manifests, pulls updates, and hot-swaps containers natively via standard Docker APIs, keeping your host completely clean.
 
 ---
 
@@ -126,6 +133,29 @@ IMAGE_UPDATE_CRON="0 2 * * *"
 
 ---
 
+### `[EXCLUDE_CONTAINERS]` (Auto-Update Blocklist)
+
+**Exclude specific containers or images from automated pulls and hot-swaps.**
+
+By default, this parameter is commented out (`#EXCLUDE_CONTAINERS=""`) in your configuration file. To utilize it, uncomment the line and define the comma-separated items you want to blocklist.
+
+**How it works:**
+- It accepts exact container names, image names, or glob patterns (e.g., `db_*` or `node:*`).
+- Items must be separated by commas (`,`). The parser is completely robust against accidental spaces before or after commas (e.g., `item1 , item2` works perfectly).
+- During an update cycle, any container matching an item on the blocklist will be skipped (not hot-swapped).
+- If all active containers using a given image are on the blocklist, the utility will also skip pulling that image entirely to conserve system bandwidth and disk space.
+
+**Examples:**
+```ini
+# Exclude a container named "pihole" and any container running mysql:8.0
+EXCLUDE_CONTAINERS="pihole,mysql:8.0"
+
+# Exclude all containers starting with "production_" and all node images
+EXCLUDE_CONTAINERS="production_*,node:*"
+```
+
+---
+
 ### `[LOG_LEVEL]` (Verbosity Control)
 
 **Control what gets written to `nexdocman.log`.**
@@ -143,7 +173,7 @@ LOG_LEVEL="INFO"
 
 ### `[LOGPRUNE]` (Log File Management)
 
-**Automatically clean old entries from `nexdocman.log` using a high-speed chronological `awk` engine.**
+**Automatically clean old entries from log files under `/var/log/NeXdocMan/` using a high-speed chronological `awk` engine.**
 
 ```ini
 LOGPRUNE_ENABLED=true
@@ -175,7 +205,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.8.1/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.9/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -184,7 +214,7 @@ cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 **Option B: Using wget**
 
 ```bash
-wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.8.1/NeXdocMan.tar.gz && \
+wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.9/NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -204,7 +234,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐳 NeXdocMan - Docker Manager (v2.8.1)
+ 🐳 NeXdocMan - Docker Manager (v2.9)
 ==================================================
 
  [Core Operations]
