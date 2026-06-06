@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v2.9"
+VERSION="v3.0"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -29,16 +29,13 @@ ENABLE_AUTO_IMAGE_UPDATE=false
 IMAGE_UPDATE_CRON="0 4 * * 0"
 EXCLUDE_CONTAINERS=""
 
-# Load config if exists
 if [ -f "$CFG_FILE" ]; then
     source "$CFG_FILE"
 fi
 
-# Display Docker status with improved formatting
 display_status() {
     local DEFAULT_NETWORKS="bridge host none"
 
-    # Running containers
     if [[ -n "$(sudo docker ps -q)" ]]; then
         echo ""
         echo "[INFO] Running Containers:"
@@ -47,9 +44,8 @@ display_status() {
         echo "[INFO] No running containers"
     fi
 
-    echo ""  # Empty line for spacing
+    echo ""
 
-    # Other containers (Exited, Paused)
     if [[ -n "$(sudo docker ps -a -q --filter 'status=exited' --filter 'status=paused')" ]]; then
         echo "[INFO] Other Containers:"
         sudo docker ps -a --filter 'status=exited' --filter 'status=paused' --format '  {{.Names}}\t{{if eq .State "exited"}}Exited{{else if eq .State "paused"}}Paused{{end}}' | awk '{printf "  %-15s (%s)\n", $1, $2}' | column -t
@@ -57,9 +53,8 @@ display_status() {
         echo "[INFO] No exited or paused containers"
     fi
 
-    echo ""  # Empty line for spacing
+    echo ""
 
-    # Unused Images
     if [[ -n "$(sudo docker images -q -f dangling=true)" ]]; then
         echo "[INFO] Unused Images:"
         sudo docker images -f "dangling=true" --format '  Repository: {{.Repository}}, Tag: {{.Tag}}, ID: {{.ID}}'
@@ -67,9 +62,8 @@ display_status() {
         echo "[INFO] No unused images"
     fi
 
-    echo ""  # Empty line for spacing
+    echo ""
 
-    # Unused Volumes
     if [[ -n "$(sudo docker volume ls -qf dangling=true)" ]]; then
         echo "[INFO] Unused Volumes:"
         sudo docker volume ls -qf dangling=true --format '  Name: {{.Name}}'
@@ -77,9 +71,8 @@ display_status() {
         echo "[INFO] No unused volumes"
     fi
 
-    echo ""  # Empty line for spacing
+    echo ""
 
-    # Unused Networks
     local all_networks=$(sudo docker network ls --format '{{.Name}}')
     local used_networks=$(sudo docker ps --format '{{.Networks}}' | tr ',' '\n' | sort | uniq)
     local unused_networks=$(comm -23 <(echo "$all_networks" | sort) <(echo "$used_networks" | sort) | grep -Ev "^(${DEFAULT_NETWORKS// /|})$")
@@ -93,7 +86,6 @@ display_status() {
     fi
 }
 
-# Helper to check log level
 level_to_num() {
     case "$1" in
         DEBUG) echo 0 ;;
@@ -110,7 +102,6 @@ is_excluded() {
 
     [ -z "${EXCLUDE_CONTAINERS}" ] && return 1
 
-    # Replace all commas with spaces to handle spacing inconsistencies and split
     local exclude_clean="${EXCLUDE_CONTAINERS//,/ }"
 
     for item in $exclude_clean; do
@@ -183,7 +174,6 @@ setup_dirs() {
         sudo chown root:root "$CRON_LOG_FILE"
     fi
 
-    # Migrate legacy cron.log to ${CRON_LOG_FILE}.bak if it exists
     if [ -f "$LOG_DIR/cron.log" ] && [ "$LOG_DIR/cron.log" != "$CRON_LOG_FILE" ]; then
         log_message "[INFO] Migrating legacy log file: $LOG_DIR/cron.log -> ${CRON_LOG_FILE}.bak"
         if [ -f "${CRON_LOG_FILE}.bak" ]; then
@@ -213,7 +203,6 @@ manage_configuration() {
         exclude_line="#EXCLUDE_CONTAINERS=\"\""
     fi
 
-    # Generate the new config, injecting variables from memory
     sudo bash -c "cat > $CFG_FILE" <<EOF
 # ==============================================================================
 # $UTILITY_NAME Configuration File
@@ -287,25 +276,25 @@ show_help() {
     echo ""
     echo "OPTIONS:"
     echo "  [General]"
-    echo "  -h, --help           Show this comprehensive help message and exit."
-    echo "  -v, --version        Show utility and script version."
-    echo "  -y, --yes            Auto-confirm all prompts (Non-interactive mode)."
-    echo "  -V, --verbose        Run operations with verbose output to terminal."
+    echo "  -h, --help                      Show this comprehensive help message and exit."
+    echo "  -v, --version                   Show utility and script version."
+    echo "  -y, --yes                       Auto-confirm all prompts (Non-interactive mode)."
+    echo "  -V, --verbose                   Run operations with verbose output to terminal."
     echo ""
     echo "  [Deployment & Removal]"
-    echo "  -d, --deploy         Initialize directories, config, and deploy $UTILITY_NAME globally."
-    echo "  -r, --remove         Uninstall $UTILITY_NAME, its logs, configs, and schedules entirely."
+    echo "  -d, --deploy                    Initialize directories, config, and deploy $UTILITY_NAME globally."
+    echo "  -r, --remove                    Uninstall $UTILITY_NAME, its logs, configs, and schedules entirely."
     echo ""
     echo "  [Docker Operations]"
-    echo "  -i, --install        Install Docker and Docker Compose and set up groups."
-    echo "  -s, --status         Display Docker and resource status."
-    echo "  -m, --manage         Check for Docker and Compose updates and apply them."
-    echo "  -k, --check-images   Audit local Docker images for remote updates (Read-only)."
-    echo "  -u, --update-images  Audit local Docker images and pull available updates."
-    echo "  -c, --cleanup        Manually trigger a deep Docker system prune."
-    echo "  -C, --configure-cron Apply or Reload the automated schedules from $CFG_FILE."
-    echo "  -p, --purge          Completely uninstall Docker, Compose, and wipe all data."
-    echo "  -U, --update-utility Check for and apply updates to NeXdocMan utility."
+    echo "  -i, --install                   Install Docker and Docker Compose and set up groups."
+    echo "  -s, --status                    Display Docker and resource status."
+    echo "  -m, --manage                    Check for Docker and Compose updates and apply them."
+    echo "  -k, --check-images [target]     Audit local Docker images (Read-only). Optionally target a specific container/image."
+    echo "  -u, --update-images [target]    Audit local Docker images and pull updates. Optionally target a specific container/image."
+    echo "  -c, --cleanup                   Manually trigger a deep Docker system prune."
+    echo "  -C, --configure-cron            Apply or Reload the automated schedules from $CFG_FILE."
+    echo "  -p, --purge                     Completely uninstall Docker, Compose, and wipe all data."
+    echo "  -U, --update-utility            Check for and apply updates to NeXdocMan utility."
     echo ""
     echo "EXAMPLES:"
     echo "  sudo $SCRIPT_NAME -d              # First-time setup on a new server"
@@ -321,7 +310,6 @@ show_help() {
 setup_cron() {
     log_message "[INFO] Applying cron schedules from configuration..."
 
-    # 1. Cleanup Schedule
     if [[ "$ENABLE_AUTO_CLEANUP" == "true" || "$ENABLE_AUTO_CLEANUP" == true ]]; then
         local cron_cmd="$CLEANUP_CRON /usr/local/bin/$SCRIPT_NAME --cleanup >> $CRON_LOG_FILE 2>&1"
         local current_crontab
@@ -346,7 +334,6 @@ setup_cron() {
         fi
     fi
 
-    # 2. Image Update Schedule
     if [[ "$ENABLE_AUTO_IMAGE_UPDATE" == "true" || "$ENABLE_AUTO_IMAGE_UPDATE" == true ]]; then
         local update_cmd="$IMAGE_UPDATE_CRON /usr/local/bin/$SCRIPT_NAME -u -y >> $CRON_LOG_FILE 2>&1"
         local current_crontab
@@ -418,13 +405,11 @@ uninstall_utility() {
     local current_crontab
     current_crontab=$(sudo crontab -l 2>/dev/null || true)
     
-    # Remove Cleanup Cron
     if echo "$current_crontab" | grep -qF "/usr/local/bin/$SCRIPT_NAME --cleanup"; then
         current_crontab=$(echo "$current_crontab" | grep -vF "/usr/local/bin/$SCRIPT_NAME --cleanup")
         log_message "[INFO] Automated cleanup schedule removed from Crontab."
     fi
     
-    # Remove Update Cron
     if echo "$current_crontab" | grep -qF "/usr/local/bin/$SCRIPT_NAME -u -y"; then
         current_crontab=$(echo "$current_crontab" | grep -vF "/usr/local/bin/$SCRIPT_NAME -u -y")
         log_message "[INFO] Automated image update schedule removed from Crontab."
@@ -451,7 +436,6 @@ uninstall_utility() {
     exit 0
 }
 
-# MODULE: UPDATE UTILITY
 update_utility() {
     log_message "[INFO] Checking for $UTILITY_NAME updates..."
     
@@ -539,7 +523,6 @@ update_utility() {
     fi
 }
 
-# MODULE: CLEANUP & LOG MANAGEMENT
 prune_single_log_file() {
     local target_file="$1"
     local max_days="$2"
@@ -641,7 +624,6 @@ perform_cleanup() {
     manage_logs
 }
 
-# MODULE: SETUP (Install Docker & Compose)
 setup_docker() {
 
     log_message "[INFO] Checking for older conflicting Docker packages..."
@@ -767,7 +749,6 @@ setup_docker() {
     log_message "[INFO] Docker installation complete."
 }
 
-# MODULE: CHECK UPDATE (Manage Docker)
 check_update() {
     log_message "[INFO] Checking for Docker and Docker Compose..."
     if ! dpkg -l | grep -q docker; then
@@ -813,16 +794,45 @@ check_update() {
     fi
 }
 
-# MODULE: CHECK IMAGES (Manage Docker Images)
 check_images() {
     local force_check_only="${1:-false}"
-    log_message "[INFO] Scanning local Docker images against remote manifests..."
+    local target="${2:-}"
+    
+    if [ -n "$target" ]; then
+        log_message "[INFO] Scanning local Docker images targeting: '$target'..."
+    else
+        log_message "[INFO] Scanning local Docker images against remote manifests..."
+    fi
     
     local update_count=0
     local images_to_update=()
     local containers_to_recreate=()
     
     for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>'); do
+        if [ -n "$target" ]; then
+            local matched=false
+            if [[ "$img" == *"$target"* ]]; then
+                matched=true
+            else
+                local active_containers
+                active_containers=$(docker ps --filter "ancestor=$img" --format '{{.ID}}')
+                if [ -n "$active_containers" ]; then
+                    while read -r c_id; do
+                        [ -z "$c_id" ] && continue
+                        local c_name=$(docker inspect --format '{{.Name}}' "$c_id" 2>/dev/null | sed 's/^\///')
+                        local compose_service=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$c_id" 2>/dev/null)
+                        if [[ "$c_name" == *"$target"* || "$compose_service" == *"$target"* ]]; then
+                            matched=true
+                            break
+                        fi
+                    done <<< "$active_containers"
+                fi
+            fi
+            if [ "$matched" = false ]; then
+                continue
+            fi
+        fi
+
         local local_digest
         local_digest=$(docker inspect --format='{{if gt (len .RepoDigests) 0}}{{index .RepoDigests 0}}{{end}}' "$img" 2>/dev/null | grep -o 'sha256:.*')
         local remote_digest
@@ -871,6 +881,14 @@ check_images() {
                 while read -r c_id; do
                     [ -z "$c_id" ] && continue
                     local c_name=$(docker inspect --format '{{.Name}}' "$c_id" 2>/dev/null | sed 's/^\///')
+                    local compose_service=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$c_id" 2>/dev/null)
+                    
+                    if [ -n "$target" ]; then
+                        if [[ "$img" != *"$target"* && "$c_name" != *"$target"* && "$compose_service" != *"$target"* ]]; then
+                            continue
+                        fi
+                    fi
+                    
                     if ! is_excluded "$c_name" "$img"; then
                         if [[ ! " ${containers_to_recreate[@]} " =~ " ${c_id} " ]]; then
                             containers_to_recreate+=("$c_id")
@@ -941,7 +959,6 @@ check_images() {
     fi
 }
 
-# MODULE: PURGE
 purge_docker() {
     log_message "[INFO] Checking for Docker and Docker Compose..."
     if dpkg -l | grep -q docker || dpkg -l | grep -q docker-compose; then
@@ -1003,16 +1020,15 @@ purge_docker() {
 
 # CLI PARSING & TUI
 
-# Auto-deploy / update global binary on execution (if run as root from outside target path)
 if [ "$EUID" -eq 0 ] && [[ "$(realpath "$0")" != "/usr/local/bin/"* ]]; then
     cp -f "$(realpath "$0")" "/usr/local/bin/$SCRIPT_NAME" 2>/dev/null || true
     chmod +x "/usr/local/bin/$SCRIPT_NAME" 2>/dev/null || true
     rm -f "/usr/local/bin/$SCRIPT_FILE_NAME" 2>/dev/null || true
 fi
 
-# Execute setup bounds
 setup_dirs
 
+image_target=""
 do_install=false
 do_status=false
 do_purge=false
@@ -1035,17 +1051,77 @@ while [[ "$#" -gt 0 ]]; do
         -s|--status) do_status=true ;;
         -p|--purge) do_purge=true ;;
         -m|--manage) do_manage=true ;;
-        -k|--check-images) do_check_images=true ;;
-        -u|--update-images) do_update_images=true ;;
+        -k|--check-images)
+            do_check_images=true
+            if [[ -n "${2:-}" && "$2" != -* ]]; then
+                image_target="$2"
+                shift
+            fi
+            ;;
+        -u|--update-images)
+            do_update_images=true
+            if [[ -n "${2:-}" && "$2" != -* ]]; then
+                image_target="$2"
+                shift
+            fi
+            ;;
         -c|--cleanup) do_cleanup=true ;;
         -C|--configure-cron) configure_cron=true ;;
         -d|--deploy) initiate_install=true ;;
         -r|--remove) uninstall_utility_flag=true ;;
         -U|--update-utility) do_update_utility=true ;;
-        *) log_message "[ERROR] Unknown parameter: $1"; exit 1 ;;
+        *)
+            if [[ "$1" != -* ]]; then
+                image_target="$1"
+            else
+                log_message "[ERROR] Unknown parameter: $1"
+                exit 1
+            fi
+            ;;
     esac
     shift
 done
+select_target_container() {
+    TUI_TARGET=""
+    local -a container_names=()
+    local -a container_details=()
+    while IFS=$'\t' read -r name image service; do
+        [ -z "$name" ] && continue
+        container_names+=("$name")
+        if [ -n "$service" ]; then
+            container_details+=("$name\t($image)\t[Compose:\t$service]")
+        else
+            container_details+=("$name\t($image)")
+        fi
+    done <<< "$(docker ps --format '{{.Names}}\t{{.Image}}\t{{.Label "com.docker.compose.service"}}')"
+
+    if [ "${#container_names[@]}" -gt 0 ]; then
+        echo "Active Containers:"
+        echo "--------------------------------------------------"
+        local idx=1
+        local formatted_list=""
+        for i in "${!container_names[@]}"; do
+            formatted_list+="${idx})\t${container_details[$i]}\n"
+            ((idx++))
+        done
+        echo -e "$formatted_list" | column -t -s $'\t'
+        echo "--------------------------------------------------"
+        echo ""
+        echo -n "Enter option number [1-$((idx-1))] or type target name: "
+    else
+        echo "No active containers running."
+        echo ""
+        echo -n "Enter target container, image, or service name: "
+    fi
+
+    local target_input
+    read target_input
+    if [[ "$target_input" =~ ^[0-9]+$ ]] && [ "$target_input" -ge 1 ] && [ "$target_input" -le "${#container_names[@]}" ]; then
+        TUI_TARGET="${container_names[$((target_input-1))]}"
+    else
+        TUI_TARGET="$target_input"
+    fi
+}
 
 show_menu() {
     clear
@@ -1088,9 +1164,9 @@ if [ "$do_install" = true ] || [ "$do_status" = true ] || [ "$do_purge" = true ]
     elif [ "$do_manage" = true ]; then
         check_update
     elif [ "$do_check_images" = true ]; then
-        check_images true
+        check_images true "$image_target"
     elif [ "$do_update_images" = true ]; then
-        check_images false
+        check_images false "$image_target"
     elif [ "$do_cleanup" = true ]; then
         perform_cleanup
     elif [ "$configure_cron" = true ]; then
@@ -1122,7 +1198,62 @@ else
                 ;;
             4)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
-                check_images false
+                while true; do
+                    clear
+                    echo "=================================================="
+                    echo " 🐳 $UTILITY_NAME - Image Audit & Update ($VERSION)"
+                    echo "=================================================="
+                    echo ""
+                    echo "  [ Global Sweeps ]"
+                    echo "    1. Audit All Container Images"
+                    echo "    2. Update All Container Images"
+                    echo ""
+                    echo "  [ Targeted Operations ]"
+                    echo "    3. Audit a Specific Container/Image"
+                    echo "    4. Update a Specific Container/Image"
+                    echo ""
+                    echo "    0. Back to Main Menu"
+                    echo "--------------------------------------------------"
+                    echo -n "Choose an option [0-4]: "
+                    read update_choice || break
+                    case $update_choice in
+                        1)
+                            check_images true
+                            break
+                            ;;
+                        2)
+                            check_images false
+                            break
+                            ;;
+                        3)
+                            echo ""
+                            select_target_container
+                            if [ -n "$TUI_TARGET" ]; then
+                                check_images true "$TUI_TARGET"
+                            else
+                                log_message "[WARNING] No target entered. Skipping."
+                            fi
+                            break
+                            ;;
+                        4)
+                            echo ""
+                            select_target_container
+                            if [ -n "$TUI_TARGET" ]; then
+                                check_images false "$TUI_TARGET"
+                            else
+                                log_message "[WARNING] No target entered. Skipping."
+                            fi
+                            break
+                            ;;
+                        0)
+                            break
+                            ;;
+                        *)
+                            echo "Invalid option: $update_choice"
+                            sleep 1
+                            ;;
+                    esac
+                done
                 ;;
             5)
                 log_message "[INFO] Running $UTILITY_NAME $VERSION"
@@ -1148,8 +1279,8 @@ else
                 log_message "[ERROR] Invalid option: $choice"
                 ;;
         esac
-        echo "Press any key to continue..."
-        read -n 1 -s || exit 0
+        read -n 1 -s -r -p "Press any key to continue..." || exit 0
+        echo ""
         clear
     done
 fi

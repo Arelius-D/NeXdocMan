@@ -1,6 +1,6 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
-> **Version:** v2.9  
+> **Version:** v3.0  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
 ## 1. What is NeXdocMan?
@@ -205,7 +205,7 @@ _From that point forward, you simply type `nexdocman` anywhere in your terminal.
 **Option A: Using curl**
 
 ```bash
-curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v2.9/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
+curl -L https://github.com/Arelius-D/NeXdocMan/releases/download/v3.0/NeXdocMan.tar.gz -o NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -214,7 +214,7 @@ cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
 **Option B: Using wget**
 
 ```bash
-wget https://github.com/Arelius-D/NeXdocMan/releases/download/v2.9/NeXdocMan.tar.gz && \
+wget https://github.com/Arelius-D/NeXdocMan/releases/download/v3.0/NeXdocMan.tar.gz && \
 tar -xzvf NeXdocMan.tar.gz && cd NeXdocMan && \
 sudo chmod +x nexdocman.sh && sudo ./nexdocman.sh -d && \
 cd .. && rm -rf NeXdocMan NeXdocMan.tar.gz
@@ -234,7 +234,7 @@ nexdocman
 
 ```text
 ==================================================
- 🐳 NeXdocMan - Docker Manager (v2.9)
+ 🐳 NeXdocMan - Docker Manager (v3.0)
 ==================================================
 
  [Core Operations]
@@ -264,25 +264,25 @@ USAGE:
 
 OPTIONS:
   [General]
-  -h, --help           Show this comprehensive help message and exit.
-  -v, --version        Show utility and script version.
-  -y, --yes            Auto-confirm all prompts (Non-interactive mode).
-  -V, --verbose        Run operations with verbose output to terminal.
+  -h, --help                      Show this comprehensive help message and exit.
+  -v, --version                   Show utility and script version.
+  -y, --yes                       Auto-confirm all prompts (Non-interactive mode).
+  -V, --verbose                   Run operations with verbose output to terminal.
 
   [Deployment & Removal]
-  -d, --deploy         Initialize directories, config, and deploy NeXdocMan globally.
-  -r, --remove         Uninstall NeXdocMan, its logs, configs, and schedules entirely.
+  -d, --deploy                    Initialize directories, config, and deploy NeXdocMan globally.
+  -r, --remove                    Uninstall NeXdocMan, its logs, configs, and schedules entirely.
 
   [Docker Operations]
-  -i, --install        Install Docker and Docker Compose and set up groups.
-  -s, --status         Display Docker and resource status.
-  -m, --manage         Check for Docker and Compose updates and apply them.
-  -k, --check-images   Audit local Docker images for remote updates (Read-only).
-  -u, --update-images  Audit local Docker images and pull available updates.
-  -c, --cleanup        Manually trigger a deep Docker system prune.
-  -C, --configure-cron Apply or Reload the automated schedules from nexdocman.cfg.
-  -p, --purge          Completely uninstall Docker, Compose, and wipe all data.
-  -U, --update-utility Check for and apply updates to NeXdocMan utility.
+  -i, --install                   Install Docker and Docker Compose and set up groups.
+  -s, --status                    Display Docker and resource status.
+  -m, --manage                    Check for Docker and Compose updates and apply them.
+  -k, --check-images [target]     Audit local Docker images (Read-only). Optionally target a specific container/image.
+  -u, --update-images [target]    Audit local Docker images and pull updates. Optionally target a specific container/image.
+  -c, --cleanup                   Manually trigger a deep Docker system prune.
+  -C, --configure-cron            Apply or Reload the automated schedules from nexdocman.cfg.
+  -p, --purge                     Completely uninstall Docker, Compose, and wipe all data.
+  -U, --update-utility            Check for and apply updates to NeXdocMan utility.
 ```
 
 **Examples:**
