@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v3.0"
+VERSION="v3.1"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -882,6 +882,8 @@ check_images() {
                     [ -z "$c_id" ] && continue
                     local c_name=$(docker inspect --format '{{.Name}}' "$c_id" 2>/dev/null | sed 's/^\///')
                     local compose_service=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$c_id" 2>/dev/null)
+                    local compose_dir=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$c_id" 2>/dev/null)
+                    local compose_file=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$c_id" 2>/dev/null)
                     
                     if [ -n "$target" ]; then
                         if [[ "$img" != *"$target"* && "$c_name" != *"$target"* && "$compose_service" != *"$target"* ]]; then
@@ -890,8 +892,15 @@ check_images() {
                     fi
                     
                     if ! is_excluded "$c_name" "$img"; then
-                        if [[ ! " ${containers_to_recreate[@]} " =~ " ${c_id} " ]]; then
-                            containers_to_recreate+=("$c_id")
+                        local already_added=false
+                        for item in "${containers_to_recreate[@]}"; do
+                            if [[ "$item" == "$c_id|"* ]]; then
+                                already_added=true
+                                break
+                            fi
+                        done
+                        if [ "$already_added" = false ]; then
+                            containers_to_recreate+=("$c_id|$c_name|$compose_dir|$compose_service|$compose_file")
                         fi
                     else
                         log_message "[INFO] EXCLUDE: Skipping container '$c_name' ($img) - matched auto-update blocklist."
@@ -915,11 +924,27 @@ check_images() {
         if [[ "$AUTO_YES" = true || "$pull_choice" =~ ^[Yy]$ ]]; then
             for img_to_pull in "${images_to_update[@]}"; do
                 log_message "[INFO] Pulling $img_to_pull..."
-                run_command sudo docker pull "$img_to_pull"
-                if [ $? -eq 0 ]; then
-                    log_message "[INFO] SUCCESS: $img_to_pull updated."
-                else
-                    log_message "[ERROR] Failed to pull $img_to_pull. Check $LOG_FILE."
+                local attempt=1
+                local max_attempts=3
+                local delay=5
+                local pull_success=false
+                while [ $attempt -le $max_attempts ]; do
+                    run_command sudo docker pull "$img_to_pull"
+                    if [ $? -eq 0 ]; then
+                        log_message "[INFO] SUCCESS: $img_to_pull updated."
+                        pull_success=true
+                        break
+                    else
+                        if [ $attempt -lt $max_attempts ]; then
+                            log_message "[WARNING] Pull failed for $img_to_pull (Attempt $attempt/$max_attempts). Retrying in ${delay}s..."
+                            sleep $delay
+                            delay=$((delay * 2))
+                        fi
+                    fi
+                    ((attempt++))
+                done
+                if [ "$pull_success" = false ]; then
+                    log_message "[ERROR] Failed to pull $img_to_pull after $max_attempts attempts. Check $LOG_FILE."
                 fi
             done
             log_message "[INFO] SUCCESS: Image update sequence complete."
@@ -930,18 +955,23 @@ check_images() {
                 fi
                 
                 if [[ "$AUTO_YES" = true || "$recreate_choice" =~ ^[Yy]$ ]]; then
-                    for c_id in "${containers_to_recreate[@]}"; do
-                        local c_name=$(docker inspect --format '{{.Name}}' "$c_id" | sed 's/^\///')
-                        local compose_dir=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$c_id" 2>/dev/null)
-                        local compose_service=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$c_id" 2>/dev/null)
-                        local compose_file=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$c_id" 2>/dev/null)
+                    local recreated_services=()
+                    for c_info in "${containers_to_recreate[@]}"; do
+                        IFS='|' read -r c_id c_name compose_dir compose_service compose_file <<< "$c_info"
 
                         if [ -n "$compose_dir" ] && [ -n "$compose_service" ]; then
+                            local service_key="${compose_dir}:${compose_service}"
+                            if [[ " ${recreated_services[@]} " =~ " ${service_key} " ]]; then
+                                log_message "[INFO] Compose service $compose_service ($c_name) was already recreated in this run."
+                                continue
+                            fi
+
                             log_message "[INFO] Recreating Compose service: $compose_service ($c_name)..."
                             local compose_cmd="sudo docker compose"
                             [ -n "$compose_file" ] && compose_cmd+=" -f $compose_file"
                             if run_command bash -c "cd \"$compose_dir\" && $compose_cmd up -d --no-deps \"$compose_service\""; then
                                 log_message "[INFO] SUCCESS: $c_name recreated."
+                                recreated_services+=("$service_key")
                             else
                                 log_message "[ERROR] Failed to recreate $c_name."
                             fi
