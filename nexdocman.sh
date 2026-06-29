@@ -4,7 +4,7 @@
 UTILITY_NAME="NeXdocMan"
 SCRIPT_FILE_NAME=$(basename "$0")
 SCRIPT_NAME=$(basename "$0" .sh)
-VERSION="v3.1"
+VERSION="v3.2"
 UTILITY_DIR=${UTILITY_DIR:-"$(dirname "$(realpath "$0")")"}
 LOG_DIR="/var/log/$UTILITY_NAME"
 LOG_FILE="$LOG_DIR/${SCRIPT_NAME}.log"
@@ -143,9 +143,10 @@ run_command() {
     local exit_code=${PIPESTATUS[0]}
     
     if [ "$exit_code" -ne 0 ]; then
-        log_message "[ERROR] Command failed with exit code $exit_code: $*"
+        local err_lvl="${RUN_COMMAND_ERR_LEVEL:-ERROR}"
+        log_message "[$err_lvl] Command failed with exit code $exit_code: $*"
         while IFS= read -r line; do
-            [ -n "$line" ] && log_message "[ERROR]   $line"
+            [ -n "$line" ] && log_message "[$err_lvl]   $line"
         done < "$temp_out"
     elif [ "$(level_to_num "$LOG_LEVEL")" -le 0 ]; then
         log_message "[DEBUG] Executing: $*"
@@ -929,7 +930,11 @@ check_images() {
                 local delay=5
                 local pull_success=false
                 while [ $attempt -le $max_attempts ]; do
-                    run_command sudo docker pull "$img_to_pull"
+                    if [ $attempt -lt $max_attempts ]; then
+                        RUN_COMMAND_ERR_LEVEL="WARNING" run_command sudo docker pull "$img_to_pull"
+                    else
+                        run_command sudo docker pull "$img_to_pull"
+                    fi
                     if [ $? -eq 0 ]; then
                         log_message "[INFO] SUCCESS: $img_to_pull updated."
                         pull_success=true
