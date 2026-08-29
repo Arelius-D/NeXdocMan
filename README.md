@@ -1,5 +1,7 @@
 # NeXdocMan: Intelligent Docker & Compose Automation 🐳
 
+[![Release](https://img.shields.io/github/v/release/Arelius-D/NeXdocMan?label=release&color=blue)](https://github.com/Arelius-D/NeXdocMan/releases) [![License](https://img.shields.io/github/license/Arelius-D/NeXdocMan)](https://github.com/Arelius-D/NeXdocMan/blob/main/LICENSE) [![Platform](https://img.shields.io/badge/Platform-Debian-%23A81D33.svg?logo=debian&logoColor=white)](#) [![Shell](https://img.shields.io/badge/Shell-Bash-%234EAA25.svg?logo=gnubash&logoColor=white)](#) [![Docker](https://img.shields.io/badge/Manages-Docker_%2B_Compose-%230db7ed.svg?logo=docker&logoColor=white)](#)
+
 > **Version:** v3.2  
 > **Core Philosophy:** "Deploy, Maintain, and Prune—Silently and Cleanly."
 
